@@ -99,7 +99,7 @@ def main():
     translation.translate_data()
     translation.prepare_mega_tgt_phrase_list(calc_count_found=False)
     translation.get_tgt_annotations_new()
-    translation.prepare_train_file()
+    # translation.prepare_train_file()
 
 
 if __name__ == '__main__':
