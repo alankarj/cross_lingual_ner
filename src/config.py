@@ -66,4 +66,4 @@ def get_allowed_tags():
 
 allowed_tags = get_allowed_tags() + [OUTSIDE_TAG]
 
-epi = epitran.Epitran('nld-Latn')
+epi = epitran.Epitran('spa-Latn')

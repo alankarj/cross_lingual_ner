@@ -7,6 +7,7 @@ import time
 import nltk
 import html
 import copy
+import itertools
 
 from googleapiclient.discovery import build
 from src import config
@@ -31,6 +32,7 @@ random.seed(config.SEED)
 MATCHING_SCORE_THRESHOLD = 0.66
 MIN_LEN = 4
 MAX_SET_SIZE = 1000
+MAX_BORDER_LEN = 3
 
 DATE_TODAY = datetime.today().strftime("%d-%m-%Y")
 print("Today's date: ", DATE_TODAY)
@@ -177,6 +179,10 @@ class Translation:
         for i, src_phrase in enumerate(self.src_phrase_list):
             assert len(src_phrase) == len(self.tgt_phrase_list[i])
 
+        # for i, sent in enumerate(src_sentence_list):
+        #     if sent.split(" ")[0] == "Bosnia":
+        #         print(str(i) + ": " + sent)
+
         if self.args.verbosity >= 1:
             print("######################################################################")
             print("Target sentence list loaded. Length: %d" % len(tgt_sentence_list))
@@ -288,7 +294,7 @@ class Translation:
                 pickle.dump(self.tgt_annotated_list, f)
 
         path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_list_" + self.suffix + "_partial" + ".pkl")
+                            "_annotated_list_1" + self.suffix + "_partial" + ".pkl")
 
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
@@ -297,11 +303,11 @@ class Translation:
             candidates_list = self.get_candidates_list()
             potential_matches = self.get_potential_matches(candidates_list)
             self.get_partial_tags(potential_matches)
-            with open(path, 'wb') as f:
-                pickle.dump(self.tgt_annotated_list, f)
+            # with open(path, 'wb') as f:
+            #     pickle.dump(self.tgt_annotated_list, f)
 
         path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_list_" + self.suffix + "" + ".pkl")
+                            "_annotated_list_" + self.suffix + DATE_TODAY + ".pkl")
 
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
@@ -309,12 +315,12 @@ class Translation:
         else:
             print("Final tags unavailable.")
             self.get_final_tags()
-            with open(path, 'wb') as f:
-                pickle.dump(self.tgt_annotated_list, f)
+            # with open(path, 'wb') as f:
+            #     pickle.dump(self.tgt_annotated_list, f)
 
     def get_candidates_list(self):
         candidates_list = list()
-        # self.sentence_ids = [6594]
+        self.sentence_ids = [5933]
         # self.sentence_ids = list(range(150))
 
         print("######################################################################")
@@ -459,6 +465,7 @@ class Translation:
                     print("Final tag: ", new_vals)
 
     def get_final_tags(self):
+
         print("######################################################################")
         print("######################################################################")
         print("Step-4: Getting final annotations.")
@@ -466,6 +473,7 @@ class Translation:
         print("######################################################################")
         problematic_entities = 0
         src_entities = 0
+
         for i, sid in enumerate(self.sentence_ids):
             print("######################################################################")
             print("Sentence ID: ", sid)
@@ -480,6 +488,7 @@ class Translation:
             entity_candidates = {j: copy.deepcopy(dummy_list) for j in range(len(src_phrases))}
             find_entity_spans(entity_candidates, ner_tag_list)
 
+            score_match = dict()
             for j in entity_candidates:
                 src_entities += 1
                 span_list = get_spans(j, entity_candidates[j])
@@ -515,10 +524,33 @@ class Translation:
 
                     print("All source candidate phrases: ", len(final_tgt_phrases))
 
-                    best_score = float("inf")
-                    best_match = -1
-                    global_best_possible_translation = ""
+                    new_span_list = list()
                     for l, span in enumerate(span_list):
+                        start, end = span
+                        orig_start = start
+                        orig_end = end
+
+                        start_list = [orig_start]
+                        while len(tgt_a.tokens[start]) <= MAX_BORDER_LEN:
+                            start += 1
+                            if start == orig_end:
+                                break
+                            start_list.append(start)
+
+                        end_list = [orig_end]
+                        while len(tgt_a.tokens[end-1]) <= MAX_BORDER_LEN:
+                            end -= 1
+                            if end == orig_start:
+                                break
+                            end_list.append(end)
+
+                        for s in start_list:
+                            for e in end_list:
+                                new_span_list.append((s, e))
+
+                    best_score = float("inf")
+
+                    for l, span in enumerate(new_span_list):
                         tgt_phrase = " ".join(tgt_a.tokens[span[0]:span[1]])
 
                         print("Target candidate phrase: ", tgt_phrase)
@@ -535,40 +567,25 @@ class Translation:
 
                         best_score = min(best_score, score)
                         if best_score == score:
-                            best_match = l
-                            global_best_possible_translation = best_possible_translation
+                            if span not in score_match:
+                                score_match[span] = dict()
+                            score_match[span][j] = (best_score, best_possible_translation)
 
-                    start, end = span_list[best_match]
-                    print("Best match: ", tgt_a.tokens[start:end])
-                    print("Best score: ", best_score)
-                    print("Best candidate phrase: ", global_best_possible_translation)
+                    for span in score_match:
+                        if j in score_match[span]:
+                            if score_match[span][j][0] > best_score:
+                                score_match[span].pop(j)
 
-                    while len(tgt_a.tokens[start]) <= MAX_BORDER_LEN:
-                        altered_phrase = " ".join(tgt_a.tokens[start + 1:end])
-                        new_edit_distance = nltk.edit_distance(altered_phrase.lower(),
-                                                               global_best_possible_translation.lower())
-                        if new_edit_distance < best_score:
-                            print(altered_phrase)
-                            print("New score: ", new_edit_distance)
-                            print("Start dropped.")
-                            start += 1
-                        else:
-                            break
+            print("Final score match: ", score_match)
+            for span in score_match:
+                if score_match[span] != dict():
+                    max_score = max([v[0] for v in score_match[span].values()])
+                    max_indices = [i for i in score_match[span].keys()
+                                   if score_match[span][i][0] == max_score]
 
-                    while len(tgt_a.tokens[end - 1]) <= MAX_BORDER_LEN:
-                        altered_phrase = " ".join(tgt_a.tokens[start:end - 1])
-                        new_edit_distance = nltk.edit_distance(altered_phrase.lower(),
-                                                               global_best_possible_translation.lower())
-                        if new_edit_distance < best_score:
-                            print(altered_phrase)
-                            print("New score: ", new_edit_distance)
-                            print("End dropped.")
-                            end -= 1
-                        else:
-                            break
-
-                    tag_type = src_a.span_list[j].tag_type
-
+                    # Pick the first one.
+                    tag_type = src_a.span_list[max_indices[0]].tag_type
+                    start, end = span
                     best_span = list(range(start, end))
                     for ind, sp in enumerate(best_span):
                         if ind == 0:
@@ -653,7 +670,7 @@ def _find_match(reference, hypothesis, transliterate=False):
     reference = copy.deepcopy(reference).lower()
     hypothesis = copy.deepcopy(hypothesis).lower()
 
-    # print("Reference: ", reference, "Hypothesis: ", hypothesis)
+    print("Reference: ", reference, "Hypothesis: ", hypothesis)
 
     if transliterate:
         hypothesis = config.epi.transliterate(hypothesis)
@@ -665,8 +682,6 @@ def _find_match(reference, hypothesis, transliterate=False):
     if L == 0 or reference == '':
         return 0, False
     if reference == hypothesis:
-        # print("Exact match found!")
-        # print("Reference: ", reference, "Hypothesis: ", hypothesis)
         ret_val = True
     else:
         for j in range(L, 0, -1):
