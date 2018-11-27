@@ -41,6 +41,30 @@ def val_error_msg(var, name):
     return placeholder + ' ' + name + ' not supported.'
 
 
+def prepare_data_new_format(tgt_lang):
+    data_path = os.path.join(os.getcwd(), config.DATA_FOLDER)
+    data_prep_helper(tgt_lang, data_path, key="testa")
+    data_prep_helper(tgt_lang, data_path, key="testb")
+
+
+def data_prep_helper(tgt_lang, data_path, key):
+    annotated_list = get_annotated_list(os.path.join(data_path, tgt_lang, key))
+    data_processing.prepare_train_file_new_format(annotated_list, os.path.join(data_path,
+                                                                               "en-" + tgt_lang), key)
+
+
+def get_annotated_list(file_path):
+    annotated_list_file_path = file_path + ".pkl"
+    if os.path.exists(annotated_list_file_path):
+        annotated_list = pickle.load(open(annotated_list_file_path, 'rb'))
+    else:
+        annotated_data = data_processing.AnnotatedData(file_path, lang=None, verbosity=2)
+        annotated_list = annotated_data.process_data()
+        with open(annotated_list_file_path, 'wb') as f:
+            pickle.dump(annotated_list, f)
+    return annotated_list
+
+
 def parse_arguments():
     parser = ArgumentParser(description='Argument Parser for cross-lingual NER.')
 
@@ -99,7 +123,16 @@ def main():
     translation.translate_data()
     translation.prepare_mega_tgt_phrase_list(calc_count_found=False)
     translation.get_tgt_annotations_new()
-    # translation.prepare_train_file()
+    translation.prepare_train_file()
+
+    # prepare_data_new_format(args.tgt_lang)
+
+    # base_path = os.path.join(args.data_path, args.src_lang + "-" + args.tgt_lang)
+    # path = os.path.join(base_path, "train" + "_annotated_list_0.5_period_" + "all" + "26-11-2018" + ".pkl")
+    # tgt_annotated_list = pickle.load(open(path, 'rb'))
+    # data_processing.prepare_train_file_new_format(tgt_annotated_list, os.path.join(args.data_path,
+    #                                                                                "en-" + args.tgt_lang),
+    #                                               key="train")
 
 
 if __name__ == '__main__':

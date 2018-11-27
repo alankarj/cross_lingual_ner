@@ -44,7 +44,6 @@ MATCHING_ALGOS = ["token_match", "ipa_match"]
 char_to_numeric = {'O': 0, 'LOC': 1, 'MISC': 2, 'ORG': 3, 'PER': 4}
 
 gold_test_dict = dict()
-gold_test_dict["en"] = dict()
 gold_test_dict["en"] = {
     "documents": 946,
     "sentences": 14041,

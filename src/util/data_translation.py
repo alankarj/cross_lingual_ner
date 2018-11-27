@@ -27,7 +27,7 @@ logging.basicConfig(level=logging.DEBUG, filename="translation.log")
 
 logger = logging.getLogger()
 
-handler = logging.FileHandler("translation.log")
+handler = logging.FileHandler("translation_en-de.log")
 handler.setLevel(logging.DEBUG)
 logger.addHandler(handler)
 
@@ -310,7 +310,7 @@ class Translation:
                 pickle.dump(self.tgt_annotated_list, f)
 
         path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_list_0.51_period_" + self.suffix + "_partial" + ".pkl")
+                            "_annotated_list_0.5_period_" + self.suffix + DATE_TODAY + "_partial" + ".pkl")
 
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
@@ -319,8 +319,8 @@ class Translation:
             candidates_list = self.get_candidates_list()
             potential_matches = self.get_potential_matches(candidates_list)
             self.get_partial_tags(potential_matches)
-            # with open(path, 'wb') as f:
-            #     pickle.dump(self.tgt_annotated_list, f)
+            with open(path, 'wb') as f:
+                pickle.dump(self.tgt_annotated_list, f)
 
         path = os.path.join(self.base_path, self.args.translate_fname +
                             "_annotated_list_0.5_period_" + self.suffix + DATE_TODAY + ".pkl")
@@ -331,8 +331,8 @@ class Translation:
         else:
             print("Final tags unavailable. Getting them...")
             self.get_final_tags()
-            # with open(path, 'wb') as f:
-            #     pickle.dump(self.tgt_annotated_list, f)
+            with open(path, 'wb') as f:
+                pickle.dump(self.tgt_annotated_list, f)
 
         # path = os.path.join(self.base_path, "problematic_entities_" + DATE_TODAY + ".pkl")
         # problematic_entities = pickle.load(open(path, "rb"))
@@ -348,7 +348,7 @@ class Translation:
 
     def get_candidates_list(self):
         candidates_list = list()
-        self.sentence_ids = [7963]
+        # self.sentence_ids = [7963]
         # self.sentence_ids = list(range(100))
 
         print("######################################################################")
@@ -690,7 +690,7 @@ class Translation:
         logging.info("Number of sentences with at least on PC-1 entity: " + str(len(sentences_to_drop)))
 
         # # self.drop_list = sentences_to_drop
-        #
+
         path = os.path.join(self.base_path, "problematic_entities_" + DATE_TODAY + ".pkl")
         with open(path, 'wb') as f:
             pickle.dump(problematic_entities, f)
@@ -737,7 +737,7 @@ class Translation:
         logging.info("Tagging problematic sentences.")
         for sent in problematic_sentences:
             logging.info("######################################################################")
-            logging.info("Sentence id: ", sent)
+            logging.info("Sentence id: " + sent)
             src_a = self.src_annotated_list[sent]
             tgt_a = self.tgt_annotated_list[sent]
             logging.info("Source tokens: " + str(src_a.tokens))
@@ -993,3 +993,4 @@ def get_ordered_spans(tag_id, tag_score_list):
 
     span_list = sorted(span_list, key=lambda x: x[2], reverse=True)
     return span_list
+

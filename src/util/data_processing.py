@@ -151,3 +151,26 @@ def prepare_train_file(annotated_list, drop_list, file_path):
                         assert len(write_str.split()) == 2
                         f.writelines(write_str)
                     f.writelines("\n")
+
+
+def prepare_train_file_new_format(annotated_list, data_path, key):
+    file_path = os.path.join(data_path, key + ".words.txt")
+    with open(file_path, 'w', encoding='utf-8') as f:
+        for i, annotation in enumerate(annotated_list):
+            if len(annotation.tokens) >= 0:
+                write_str = get_write_str(annotation.tokens)
+                f.writelines(write_str)
+
+    file_path = os.path.join(data_path, key + ".tags.txt")
+    with open(file_path, 'w', encoding='utf-8') as f:
+        for i, annotation in enumerate(annotated_list):
+            if len(annotation.tokens) >= 0:
+                write_str = get_write_str(annotation.ner_tags)
+                f.writelines(write_str)
+
+
+def get_write_str(token_list):
+    write_str = ""
+    for j, token in enumerate(token_list):
+        write_str += token + " "
+    return write_str.rstrip(" ") + "\n"
