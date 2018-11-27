@@ -8,12 +8,16 @@ import nltk
 import html
 import copy
 import itertools
+import json
+import string
 
 from googleapiclient.discovery import build
 from src import config
 from src.util import data_processing
 from src.util.annotation_evaluation import post_process_annotations
 from datetime import datetime
+from collections import Counter
+from nltk.corpus import stopwords
 
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 logging.getLogger('googleapiclient.discovery').setLevel(logging.ERROR)
@@ -29,12 +33,15 @@ logger.addHandler(handler)
 
 random.seed(config.SEED)
 
-MATCHING_SCORE_THRESHOLD = 0.66
-MIN_LEN = 4
+MATCHING_SCORE_THRESHOLD = 0.50
+MIN_LEN = 3
 MAX_SET_SIZE = 1000
 MAX_BORDER_LEN = 3
+TF_IDF_THRESHOLD = 0.50
+MOST_COMMON = 10
 
 DATE_TODAY = datetime.today().strftime("%d-%m-%Y")
+# DATE_TODAY = "25-11-2018"
 print("Today's date: ", DATE_TODAY)
 
 
@@ -50,6 +57,10 @@ class Translation:
         self.tgt_annotated_list = list()
         self.tgt_phrase_instance_list = list()
         self.suffix = None
+        self.drop_list = None
+        self.tgt_lang = args.tgt_lang
+        self.epi = config.get_epi(self.tgt_lang)
+        self.stop_word_list = set(stopwords.words(config.stop_word_dict[self.tgt_lang]))
 
     def translate_data(self):
         num_sentences = len(self.src_annotated_list)
@@ -179,9 +190,11 @@ class Translation:
         for i, src_phrase in enumerate(self.src_phrase_list):
             assert len(src_phrase) == len(self.tgt_phrase_list[i])
 
-        # for i, sent in enumerate(src_sentence_list):
-        #     if sent.split(" ")[0] == "Bosnia":
-        #         print(str(i) + ": " + sent)
+        # for i, sent in enumerate(tgt_sentence_list):
+        #     tokens = sent.split(" ")
+        #     if len(tokens) >= 3:
+        #         if tokens[2] == "internacionales":
+        #             print(str(i) + ": " + sent)
 
         if self.args.verbosity >= 1:
             print("######################################################################")
@@ -279,22 +292,25 @@ class Translation:
 
     def get_tgt_annotations_new(self):
         # Target language tokens (obtained through Google Translate + cleaned)
-        path = os.path.join(self.base_path, self.args.translate_fname + "_tgt_annotated_list_" + self.suffix + ".pkl")
+        path = os.path.join(self.base_path, self.args.translate_fname + "_tgt_annotated_list_period_" + self.suffix + ".pkl")
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
 
         else:
             for i, sentence in enumerate(self.tgt_sentence_list):
+                print("######################################################################")
+                print("Sentence-%d: %s" % (i, sentence))
                 sentence = sentence.replace("&#39;", "\'")
                 sentence = sentence.replace(" &amp; ", "&")
                 tgt_annotation = data_processing.Annotation()
                 tgt_annotation.tokens = get_clean_tokens(sentence)
+                print("Tokens: ", tgt_annotation.tokens)
                 self.tgt_annotated_list.append(tgt_annotation)
             with open(path, "wb") as f:
                 pickle.dump(self.tgt_annotated_list, f)
 
         path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_list_1" + self.suffix + "_partial" + ".pkl")
+                            "_annotated_list_0.51_period_" + self.suffix + "_partial" + ".pkl")
 
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
@@ -307,21 +323,33 @@ class Translation:
             #     pickle.dump(self.tgt_annotated_list, f)
 
         path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_list_" + self.suffix + DATE_TODAY + ".pkl")
+                            "_annotated_list_0.5_period_" + self.suffix + DATE_TODAY + ".pkl")
 
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
 
         else:
-            print("Final tags unavailable.")
+            print("Final tags unavailable. Getting them...")
             self.get_final_tags()
             # with open(path, 'wb') as f:
             #     pickle.dump(self.tgt_annotated_list, f)
 
+        # path = os.path.join(self.base_path, "problematic_entities_" + DATE_TODAY + ".pkl")
+        # problematic_entities = pickle.load(open(path, "rb"))
+        #
+        # path = os.path.join(self.base_path, "problem_children_" + DATE_TODAY + ".pkl")
+        # problem_children = pickle.load(open(path, "rb"))
+        #
+        # path = os.path.join(self.base_path, "problematic_sentences_" + DATE_TODAY + ".pkl")
+        # problematic_sentences = pickle.load(open(path, "rb"))
+        #
+        # final_candidate_dict = self.get_refined_candidates(problem_children, problematic_entities)
+        # self.tag_problematic_sentences(problematic_sentences, final_candidate_dict, problematic_entities)
+
     def get_candidates_list(self):
         candidates_list = list()
-        self.sentence_ids = [5933]
-        # self.sentence_ids = list(range(150))
+        self.sentence_ids = [7963]
+        # self.sentence_ids = list(range(100))
 
         print("######################################################################")
         print("######################################################################")
@@ -398,8 +426,8 @@ class Translation:
                                             transliterate = False
                                         else:
                                             transliterate = True
-                                        x = _find_match(reference_token, candidate[0],
-                                                        transliterate=transliterate)
+                                        x = _find_match(reference_token, candidate[0], self.epi,
+                                                        self.stop_word_list, transliterate=transliterate)
                                         temp_matches[matching_algo].append(x)
 
                                 for o, matching_algo in enumerate(config.MATCHING_ALGOS):
@@ -407,11 +435,14 @@ class Translation:
                                     temp_match = list(map(list, zip(*temp_match)))
                                     if True in temp_match[1]:
                                         max_score = max(temp_match[0])
-                                        if max_score >= MATCHING_SCORE_THRESHOLD:
-                                            max_indices = [ind for ind, score in enumerate(temp_match[0])
-                                                           if score == max_score]
-                                            for index in max_indices:
+                                        max_indices = [ind for ind, score in enumerate(temp_match[0])
+                                                       if score == max_score]
+                                        for index in max_indices:
+                                            if "-" in tgt_a.tokens[index]:
                                                 tgt_matches[index].add((j, k, o, max_score, candidate[1]))
+                                            elif max_score >= MATCHING_SCORE_THRESHOLD:
+                                                tgt_matches[index].add((j, k, o, max_score, candidate[1]))
+
             potential_matches.append(tgt_matches)
         return potential_matches
 
@@ -465,14 +496,17 @@ class Translation:
                     print("Final tag: ", new_vals)
 
     def get_final_tags(self):
-
         print("######################################################################")
         print("######################################################################")
         print("Step-4: Getting final annotations.")
         print("######################################################################")
         print("######################################################################")
-        problematic_entities = 0
+        problematic_entities = Counter()
         src_entities = 0
+        occur_problem_entities = 0
+        problematic_sentences = dict()
+        problem_children = dict()
+        idf = dict()
 
         for i, sid in enumerate(self.sentence_ids):
             print("######################################################################")
@@ -493,13 +527,30 @@ class Translation:
                 src_entities += 1
                 span_list = get_spans(j, entity_candidates[j])
 
+                for tok in set(tgt_a.tokens):
+                    if tok not in idf:
+                        idf[tok] = 0
+                    idf[tok] += 1
+
                 if span_list == list():
-                    problematic_entities += 1
+                    occur_problem_entities += 1
+                    if i not in problematic_sentences:
+                        problematic_sentences[i] = list()
+                    problematic_sentences[i].append((j, src_phrases[j]))
+
+                    problematic_entities.update({src_phrases[j]: 1})
                     logging.info("######################################################################")
                     logging.info("No correspondence found in sentence: " + str(sid))
                     logging.info("Source tokens: " + str(src_a.tokens))
                     logging.info("Target tokens: " + str(tgt_a.tokens))
                     logging.info("Source phrase for which no match found: " + str(src_phrases[j]))
+
+                    if src_phrases[j] not in problem_children:
+                        problem_children[src_phrases[j]] = Counter()
+
+                    for tok in tgt_a.tokens:
+                        problem_children[src_phrases[j]].update({tok: 1})
+
                     logging.info("######################################################################")
 
                 else:
@@ -531,14 +582,14 @@ class Translation:
                         orig_end = end
 
                         start_list = [orig_start]
-                        while len(tgt_a.tokens[start]) <= MAX_BORDER_LEN:
+                        while tgt_a.tokens[start] in self.stop_word_list:
                             start += 1
                             if start == orig_end:
                                 break
                             start_list.append(start)
 
                         end_list = [orig_end]
-                        while len(tgt_a.tokens[end-1]) <= MAX_BORDER_LEN:
+                        while tgt_a.tokens[end-1] in self.stop_word_list:
                             end -= 1
                             if end == orig_start:
                                 break
@@ -557,6 +608,12 @@ class Translation:
 
                         score = float("inf")
                         best_possible_translation = ""
+
+                        if len(final_tgt_phrases) < 100:
+                            print("Final target phrases: ", final_tgt_phrases)
+                        else:
+                            print("Size of target phrase set more than 100.")
+
                         for possible_translation in final_tgt_phrases:
                             edit_dist = nltk.edit_distance(tgt_phrase.lower(), possible_translation.lower())
                             score = min(score, edit_dist)
@@ -602,13 +659,139 @@ class Translation:
             print("Target NER tags: ", tgt_a.ner_tags)
 
         logging.info("######################################################################")
-        logging.info("Problematic entities: " + str(problematic_entities))
-        logging.info("All source entities: " + str(src_entities))
+        logging.info("Entities with no match: " + str(problematic_entities))
+        logging.info("Number of unique entities with no match: " + str(len(problematic_entities)))
+        logging.info("Number of occurrences of entities with no match: " + str(occur_problem_entities))
+        logging.info("Number of all source entities: " + str(src_entities))
+
+        N = len(self.sentence_ids)
+        logging.info("Total documents: " + str(N))
+        logging.info("Potential candidates for problematic entities:")
+        count_pc = 0
+        for pc in problem_children:
+            if problematic_entities[pc] > 1:
+                count_pc += 1
+                for k, v in problem_children[pc].items():
+                    assert k in idf
+                    problem_children[pc][k] = v * math.log(N/idf[k])
+                logging.info("######################################################################")
+                logging.info(pc + ": " + str(problem_children[pc].most_common(100)))
+
+        sentences_to_drop = list()
+        for k, val in problematic_sentences.items():
+            to_be_dropped = False
+            for v in val:
+                if problematic_entities[v[1]] > 1:
+                    to_be_dropped = True
+            if to_be_dropped:
+                sentences_to_drop.append(k)
+
+        logging.info("Number of problematic entities with count > 1 (PC-1): " + str(count_pc))
+        logging.info("Number of sentences with at least on PC-1 entity: " + str(len(sentences_to_drop)))
+
+        # # self.drop_list = sentences_to_drop
+        #
+        path = os.path.join(self.base_path, "problematic_entities_" + DATE_TODAY + ".pkl")
+        with open(path, 'wb') as f:
+            pickle.dump(problematic_entities, f)
+
+        path = os.path.join(self.base_path, "problem_children_" + DATE_TODAY + ".pkl")
+        with open(path, 'wb') as f:
+            pickle.dump(problem_children, f)
+
+        path = os.path.join(self.base_path, "problematic_sentences_" + DATE_TODAY + ".pkl")
+        with open(path, 'wb') as f:
+            pickle.dump(problematic_sentences, f)
+
+        final_candidate_dict = self.get_refined_candidates(problem_children, problematic_entities)
+        self.tag_problematic_sentences(problematic_sentences, final_candidate_dict, problematic_entities)
+
+    def get_refined_candidates(self, problem_children, problematic_entities):
+        final_candidate_dict = dict()
+        for token in problem_children:
+            if problematic_entities[token] > 1:
+                most_common_candidates = problem_children[token].most_common(MOST_COMMON)
+                max_score = most_common_candidates[0][1]
+
+                final_candidates = []
+
+                for i, candidates in enumerate(most_common_candidates):
+                    if candidates[0] not in self.stop_word_list and \
+                            candidates[0] not in string.punctuation:
+                        if candidates[1] >= TF_IDF_THRESHOLD * max_score:
+                            final_candidates.append(candidates)
+                        else:
+                            break
+
+                final_candidate_dict[token] = final_candidates
+                logging.info("######################################################################")
+                logging.info("Token: " + str(token) + " Final candidates: " + str(final_candidates))
+        logging.info("######################################################################")
+        logging.info("Final candidates dict: " + str(final_candidate_dict))
+        return final_candidate_dict
+
+    def tag_problematic_sentences(self, problematic_sentences, final_candidate_dict, problematic_entities):
+        total_entities = 0
+        total_annotations_done = 0
+
+        logging.info("Tagging problematic sentences.")
+        for sent in problematic_sentences:
+            logging.info("######################################################################")
+            logging.info("Sentence id: ", sent)
+            src_a = self.src_annotated_list[sent]
+            tgt_a = self.tgt_annotated_list[sent]
+            logging.info("Source tokens: " + str(src_a.tokens))
+            logging.info("Target tokens: " + str(tgt_a.tokens))
+
+            for entities in problematic_sentences[sent]:
+                if problematic_entities[entities[1]] > 1:
+                    total_entities += 1
+                    tag_type = src_a.span_list[entities[0]].tag_type
+                    entity_str = entities[1]
+
+                    candidate_list = final_candidate_dict[entity_str]
+                    token_list = {k: v for k, v in candidate_list}
+                    temp_ner_list = [(-1, 0) for _ in tgt_a.tokens]
+
+                    for i, tgt_token in enumerate(tgt_a.tokens):
+                        if tgt_token in token_list:
+                            temp_ner_list[i] = (tag_type, token_list[tgt_token])
+
+                    logging.info("######################################################################")
+                    logging.info("Entity: " + str(entity_str))
+                    ordered_span_list = get_ordered_spans(tag_type, temp_ner_list)
+                    logging.info("Ordered span list: " + str(ordered_span_list))
+
+                    for span in ordered_span_list:
+                        if self.can_tag(span[0], span[1], tgt_a):
+                            logging.info("Tagging possible!")
+                            logging.info("Target phrase: " + " ".join(tgt_a.tokens[span[0]:span[1]]))
+                            logging.info("Tag: " + tag_type)
+                            total_annotations_done += 1
+                            best_span = list(range(span[0], span[1]))
+                            for ind, sp in enumerate(best_span):
+                                if ind == 0:
+                                    prefix = "B"
+                                else:
+                                    prefix = "I"
+                                tgt_a.ner_tags[sp] = prefix + "-" + tag_type
+                            break
+
+        logging.info("######################################################################")
+        logging.info("Number of PC-1 entities: " + str(total_entities))
+        logging.info("Number of annotated entities: " + str(total_annotations_done))
+
+    def can_tag(self, span_beg, span_end, tgt_a):
+        for i in range(span_beg, span_end):
+            if tgt_a.ner_tags[i] != "O":
+                if type(tgt_a.ner_tags[i]) != list:
+                    return False
+        return True
 
     def prepare_train_file(self):
-        self.tgt_annotated_list = post_process_annotations(self.tgt_annotated_list)
-        file_path = os.path.join(self.base_path, self.args.translate_fname + "_affix-match_" + DATE_TODAY)
-        data_processing.prepare_train_file(self.tgt_annotated_list, file_path)
+        self.tgt_annotated_list = post_process_annotations(self.tgt_annotated_list, self.stop_word_list)
+        file_path = os.path.join(self.base_path, self.args.translate_fname + "_affix-match_0.5_period_" + DATE_TODAY)
+        data_processing.prepare_train_file(self.tgt_annotated_list, self.drop_list, file_path)
 
 
 class TgtPhrases:
@@ -648,15 +831,26 @@ def get_clean_tokens(sentence, print_info=False):
 
     final_tokens = list()
     ampersand_found = False
+    prior_period_index = -float("inf")
     for i, token in enumerate(tokens):
         if ampersand_found:
             ampersand_found = False
             continue
 
-        if token == "&" and i != 0 and i != len(tokens)-1:
+        elif token == "&" and i != 0 and i != len(tokens)-1:
             final_tokens.pop()
             final_tokens.append(tokens[i-1] + "&" + tokens[i+1])
             ampersand_found = True
+
+        elif token == "." and i != 0 and i != len(tokens) - 1:
+            if prior_period_index == -float("inf") or i - prior_period_index > 2:
+                prior_period_index = i
+                final_tokens.pop()
+                final_tokens.append(tokens[i - 1] + ".")
+            else:
+                final_tokens.pop()
+                final_tokens.pop()
+                final_tokens.append(tokens[i - 3] + "." + tokens[i - 1] + ".")
 
         else:
             if token == "``" or token == "''":
@@ -666,15 +860,19 @@ def get_clean_tokens(sentence, print_info=False):
     return final_tokens
 
 
-def _find_match(reference, hypothesis, transliterate=False):
+def _find_match(reference, hypothesis, epi, stop_word_list, transliterate=False):
     reference = copy.deepcopy(reference).lower()
     hypothesis = copy.deepcopy(hypothesis).lower()
 
-    print("Reference: ", reference, "Hypothesis: ", hypothesis)
+    # print("Reference: ", reference, "Hypothesis: ", hypothesis)
 
     if transliterate:
-        hypothesis = config.epi.transliterate(hypothesis)
-        reference = config.epi.transliterate(reference)
+        hypothesis = epi.transliterate(hypothesis)
+        reference = epi.transliterate(reference)
+
+    is_stop_word = False
+    if (hypothesis in stop_word_list) or (reference in stop_word_list):
+        is_stop_word = True
 
     L = len(hypothesis)
     score = L
@@ -687,15 +885,15 @@ def _find_match(reference, hypothesis, transliterate=False):
         for j in range(L, 0, -1):
             sub_str = hypothesis[:j]
             if reference.startswith(sub_str):
-                if (L > MIN_LEN) and (len(reference) > MIN_LEN):
+                if not is_stop_word:
                     ret_val = True
                     break
             elif reference.endswith(sub_str):
-                if (L > MIN_LEN) and (len(reference) > MIN_LEN):
+                if not is_stop_word:
                     ret_val = True
                     break
             score -= 1
-    return float(score / len(reference)), ret_val
+    return min(float(score / len(reference)), float(score / L)), ret_val
 
 
 def generate_fast_align_data(src_sent_list, tgt_sent_list, file_path):
@@ -774,4 +972,24 @@ def get_spans(tag_id, tag_list):
             span_list.append((beg, i))
         prev_tag = curr_tag
 
+    return span_list
+
+
+def get_ordered_spans(tag_id, tag_score_list):
+    prev_tag = (-1, 0.0)
+    span_list = list()
+    tag_score_list.append((-1, 0.0))
+
+    beg = 0
+    score = 0
+    for i, curr_tag in enumerate(tag_score_list):
+        if (prev_tag[0] == -1) and (curr_tag[0] == tag_id):
+            beg = i
+        elif (prev_tag[0] != -1) and (curr_tag[0] == -1):
+            span_list.append((beg, i, score))
+            score = 0
+        score += curr_tag[1]
+        prev_tag = curr_tag
+
+    span_list = sorted(span_list, key=lambda x: x[2], reverse=True)
     return span_list

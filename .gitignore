@@ -1,6 +1,7 @@
 data/
 .idea/
 src/old_func.py
+*.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

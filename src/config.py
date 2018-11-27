@@ -55,6 +55,9 @@ gold_test_dict["en"] = {
     "PER": 6600
 }
 
+stop_word_dict = {"es": "spanish", "de": "german", "nl": "dutch"}
+epi_dict = {"es": "spa-Latn", "de": "deu-Latn", "nl": "nld-Latn"}
+
 
 def get_allowed_tags():
     allowed_tags = []
@@ -66,4 +69,6 @@ def get_allowed_tags():
 
 allowed_tags = get_allowed_tags() + [OUTSIDE_TAG]
 
-epi = epitran.Epitran('spa-Latn')
+
+def get_epi(lang):
+    return epitran.Epitran(epi_dict[lang])

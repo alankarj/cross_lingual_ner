@@ -118,19 +118,25 @@ def process_annotations(tag_list):
     return new_tag_list
 
 
-def post_process_annotations(tgt_annotated_list):
+def post_process_annotations(tgt_annotated_list, stop_word_list):
     for i, tgt_a in enumerate(tgt_annotated_list):
         prev_type = None
         for j, curr_tag in enumerate(tgt_a.ner_tags):
-            # if curr_tag != config.OUTSIDE_TAG:
-            #     tgt_a.tokens[j] = tgt_a.tokens[j].capitalize()
             if curr_tag.startswith("I"):
+                tgt_a.tokens[j] = capitalize_conditionally(tgt_a.tokens[j], stop_word_list)
                 curr_type = curr_tag.split("-")[1]
                 if curr_type != prev_type:
                     tgt_a.ner_tags[j] = "B-" + curr_type
             elif curr_tag.startswith("B"):
+                tgt_a.tokens[j] = capitalize_conditionally(tgt_a.tokens[j], stop_word_list)
                 curr_type = curr_tag.split("-")[1]
             else:
                 curr_type = None
             prev_type = curr_type
     return tgt_annotated_list
+
+
+def capitalize_conditionally(token, stop_word_list):
+    if token not in stop_word_list:
+        token = token.capitalize()
+    return token
