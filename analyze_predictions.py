@@ -52,7 +52,7 @@ if __name__ == "__main__":
     predict_file_path = os.path.join(data_path, "en-" + TGT_LANG, "prediction")
     true_file_path = os.path.join(data_path, "true.txt")
 
-    predicted_tags = get_predicted_tags(os.path.join(predict_file_path, "predicted.txt"))
+    predicted_tags = get_predicted_tags(os.path.join(predict_file_path, "predicted_idc.txt"))
     print(predicted_tags)
     annotated_list = data_prep_helper(TGT_LANG, data_path, key="testb")
-    prepare_final_file(annotated_list, os.path.join(predict_file_path, "error_analysis.txt"), predicted_tags)
+    prepare_final_file(annotated_list, os.path.join(predict_file_path, "error_analysis_idc.txt"), predicted_tags)
