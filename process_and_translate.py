@@ -43,9 +43,9 @@ def val_error_msg(var, name):
 
 def prepare_data_new_format(tgt_lang):
     data_path = os.path.join(os.getcwd(), config.DATA_FOLDER)
-    data_prep_helper(tgt_lang, data_path, key="testa")
-    data_prep_helper(tgt_lang, data_path, key="testb")
-    # data_prep_helper(tgt_lang, data_path, key="train_original")
+    # data_prep_helper(tgt_lang, data_path, key="testa")
+    # data_prep_helper(tgt_lang, data_path, key="testb")
+    data_prep_helper(tgt_lang, data_path, key="train_original")
 
 
 def data_prep_helper(tgt_lang, data_path, key):
@@ -117,8 +117,8 @@ def main():
     with open(os.path.join(args.data_path, args.api_key_fname), 'r', encoding='utf-8') as f:
         args.api_key = f.read().strip('\n')
 
-    #base_path = os.path.join(args.data_path, args.src_lang + "-" + args.tgt_lang)
-    # src_file_path = os.path.join(base_path, "lexicon_ground-truth")
+    # base_path = os.path.join(args.data_path, args.src_lang + "-" + args.tgt_lang)
+    # src_file_path = os.path.join(base_path, "lexicon_ground-truth.txt")
     # tgt_file_path = os.path.join(base_path, "lexicon_ground-truth.pkl")
     # data_translation.read_lexicon(src_file_path, tgt_file_path)
 
@@ -126,9 +126,14 @@ def main():
     translation.translate_data()
     translation.prepare_mega_tgt_phrase_list(calc_count_found=False)
     translation.get_tgt_annotations_new()
-    translation.prepare_train_file()
+    # translation.prepare_train_file()
 
-    prepare_data_new_format(args.tgt_lang)
+    # translation = data_translation_phrase.Translation(annotated_list, args)
+    # translation.translate_data()
+    # translation.prepare_mega_tgt_phrase_list(calc_count_found=False)
+    # translation.get_tgt_annotations_new()
+
+    # prepare_data_new_format(args.tgt_lang)
     #
     # base_path = os.path.join(args.data_path, args.src_lang + "-" + args.tgt_lang)
     # path = os.path.join(base_path, "train" + "_annotated_list_0.5_period_" + "all" + "27-11-2018" + ".pkl")

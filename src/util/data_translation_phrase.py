@@ -9,7 +9,6 @@ import html
 import copy
 import itertools
 import string
-import epitran
 
 from googleapiclient.discovery import build
 from src import config
@@ -55,7 +54,6 @@ class Translation:
         self.drop_list = None
         self.tgt_lang = args.tgt_lang
         self.epi = config.get_epi(self.tgt_lang)
-        # self.src_epi = epitran.Epitran("eng-Latn")
 
         if self.tgt_lang in config.stop_word_dict:
             self.stop_word_list = set(stopwords.words(config.stop_word_dict[self.tgt_lang]))
@@ -64,7 +62,7 @@ class Translation:
         elif self.tgt_lang == "ta":
             self.stop_word_list = config.stop_word_list_ta
         else:
-            raise ValueError("Language %s stop word list not available." % self.tgt_lang)
+            raise ValueError("Language %s stop word list not available." & self.tgt_lang)
 
         handler = logging.FileHandler("translation_" + "en-" + self.tgt_lang + "_"
                                       + datetime.today().strftime("%d-%m-%Y") + "_" +
@@ -204,11 +202,6 @@ class Translation:
         for i, src_phrase in enumerate(self.src_phrase_list):
             assert len(src_phrase) == len(self.tgt_phrase_list[i])
 
-        # for i, src_a in enumerate(self.src_annotated_list):
-        #     if src_a.tokens[0] == "Abu":
-        #         print(i)
-        #         print(src_a.tokens)
-
         if self.args.verbosity >= 1:
             print("######################################################################")
             print("Target sentence list loaded. Length: %d" % len(tgt_sentence_list))
@@ -336,22 +329,23 @@ class Translation:
         #                            "_no_phonetic_", "_no_google_", "_no_google_v2_"]:
         #     temp_suffix = "1_period_"
         # else:
+        #     temp_suffix = ABLATION_STRING
 
-        temp_suffix = ABLATION_STRING
+        # path = os.path.join(self.base_path, self.args.translate_fname +
+        #                     "_annotated_listblah_" + str(MATCHING_SCORE_THRESHOLD) + temp_suffix + self.suffix + DATE_TODAY + "_partial" + ".pkl")
+        #
+        #
+        # if os.path.exists(path):
+        #     self.tgt_annotated_list = pickle.load(open(path, "rb"))
+        #
+        # else:
+        #     candidates_list = self.get_candidates_list()
+        #     potential_matches = self.get_potential_matches(candidates_list)
+        #     self.get_partial_tags(potential_matches)
+        #     # with open(path, 'wb') as f:
+        #     #     pickle.dump(self.tgt_annotated_list, f)
 
-        path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_listblah_" + str(MATCHING_SCORE_THRESHOLD) + temp_suffix + self.suffix + DATE_TODAY + "_partial" + ".pkl")
-
-        if os.path.exists(path):
-            self.tgt_annotated_list = pickle.load(open(path, "rb"))
-
-        else:
-            candidates_list = self.get_candidates_list()
-            potential_matches = self.get_potential_matches(candidates_list)
-            self.get_partial_tags(potential_matches)
-            with open(path, 'wb') as f:
-                pickle.dump(self.tgt_annotated_list, f)
-
+        self.sentence_ids = [7]
         temp_suffix = ABLATION_STRING
         path = os.path.join(self.base_path, self.args.translate_fname +
                             "_annotated_listblah_" + str(MATCHING_SCORE_THRESHOLD) + temp_suffix + self.suffix + DATE_TODAY + ".pkl")
@@ -361,9 +355,9 @@ class Translation:
 
         else:
             print("Final tags unavailable. Getting them...")
-            self.get_final_tags()
-            with open(path, 'wb') as f:
-                pickle.dump(self.tgt_annotated_list, f)
+            self.get_final_tags_phrase()
+            # with open(path, 'wb') as f:
+            #     pickle.dump(self.tgt_annotated_list, f)
 
         # path = os.path.join(self.base_path, "problematic_entities_" + DATE_TODAY + ".pkl")
         # problematic_entities = pickle.load(open(path, "rb"))
@@ -396,7 +390,6 @@ class Translation:
 
     def get_candidates_list(self):
         candidates_list = list()
-        # self.sentence_ids = [153]
         # self.sentence_ids = list(range(100))
 
         print("######################################################################")
@@ -488,14 +481,7 @@ class Translation:
                                         if ABLATION_STRING == "_no_phonetic_" and o == 1:
                                             transliterate = False
 
-                                        # if k == 1:
-                                        #     epi = self.src_epi
-                                        # else:
-                                        #     epi = self.epi
-
-                                        epi = self.epi
-
-                                        x = _find_match(reference_token, candidate[0], epi,
+                                        x = _find_match(reference_token, candidate[0], self.epi,
                                                         self.stop_word_list, transliterate=transliterate)
                                         temp_matches[matching_algo].append(x)
 
@@ -562,7 +548,7 @@ class Translation:
                     tgt_a.ner_tags.append(new_vals)
                     print("Final tag: ", new_vals)
 
-    def get_final_tags(self):
+    def get_final_tags_phrase(self):
         print("######################################################################")
         print("######################################################################")
         print("Step-4: Getting final annotations.")
@@ -584,206 +570,275 @@ class Translation:
             src_phrases = self.src_phrase_list[sid]
             ner_tag_list = tgt_a.ner_tags
 
-            dummy_list = [-1 for _ in ner_tag_list]
+            candidate_entities = list()
+            for j, token in enumerate(tgt_a.tokens):
+                entity = token
+                candidate_entities.append(entity)
+                for k in range(j + 1, len(tgt_a.tokens), 1):
+                    entity = entity + " " + tgt_a.tokens[k]
+                    candidate_entities.append(entity)
 
-            entity_candidates = {j: copy.deepcopy(dummy_list) for j in range(len(src_phrases))}
-            find_entity_spans(entity_candidates, ner_tag_list)
+            print(len(candidate_entities))
+            print(len(tgt_a.tokens))
 
-            score_match = dict()
-            for j in entity_candidates:
-                src_entities += 1
-                span_list = get_spans(j, entity_candidates[j])
+            match_list = dict()
+            for cand_ent in candidate_entities:
+                match_list[cand_ent] = list()
 
-                tok_set = set([tok.lower() for tok in tgt_a.tokens])
-                for tok in tok_set:
-                    if tok not in idf:
-                        idf[tok] = 0
-                    idf[tok] += 1
+            for k, src_phrase in enumerate(src_phrases):
+                print("######################################################################")
+                print("Source phrase: ", src_phrase)
+                print("######################################################################")
+                temp_tgt_phrases = set()
+                all_tgt_phrases = self.tgt_phrase_instance_list[sid][k].tgt_phrase_list
 
-                if span_list == list():
-                    occur_problem_entities += 1
-                    if i not in problematic_sentences:
-                        problematic_sentences[i] = list()
-                    problematic_sentences[i].append((j, src_phrases[j]))
+                for l, candidate_phrases in enumerate(all_tgt_phrases):
+                    temp_tgt_phrases.update(candidate_phrases)
 
-                    problematic_entities.update({src_phrases[j]: 1})
-                    logging.info("######################################################################")
-                    logging.info("No correspondence found in sentence: " + str(sid))
-                    logging.info("Source tokens: " + str(src_a.tokens))
-                    logging.info("Target tokens: " + str(tgt_a.tokens))
-                    logging.info("Source phrase for which no match found: " + str(src_phrases[j]))
+                final_tgt_phrases = copy.deepcopy(temp_tgt_phrases)
 
-                    if src_phrases[j] not in problem_children:
-                        problem_children[src_phrases[j]] = Counter()
+                for tgt_phrase in temp_tgt_phrases:
+                    if len(final_tgt_phrases) > MAX_SET_SIZE:
+                        break
+                    if tgt_phrase != all_tgt_phrases[0][0]:
+                        permutations = itertools.permutations(tgt_phrase.split(" "))
+                        final_tgt_phrases.update([" ".join(x) for x in permutations])
 
-                    for tok in tgt_a.tokens:
-                        problem_children[src_phrases[j]].update({tok: 1})
-
-                    logging.info("######################################################################")
-
-                else:
-                    print("######################################################################")
-                    print("Source phrase: ", src_phrases[j])
-                    print("######################################################################")
-                    temp_tgt_phrases = set()
-                    all_tgt_phrases = self.tgt_phrase_instance_list[sid][j].tgt_phrase_list
-                    for k, candidate_phrases in enumerate(all_tgt_phrases):
-                        temp_tgt_phrases.update(candidate_phrases)
-
+                if len(final_tgt_phrases) > 2 * MAX_SET_SIZE:
                     final_tgt_phrases = copy.deepcopy(temp_tgt_phrases)
 
-                    if ABLATION_STRING != "_no_google_v2_":
-                        for tgt_phrase in temp_tgt_phrases:
-                            if len(final_tgt_phrases) > MAX_SET_SIZE:
-                                break
-                            if tgt_phrase != all_tgt_phrases[0][0]:
-                                permutations = itertools.permutations(tgt_phrase.split(" "))
-                                final_tgt_phrases.update([" ".join(x) for x in permutations])
+                print("All source candidate phrases: ", len(final_tgt_phrases))
 
-                        if len(final_tgt_phrases) > 2 * MAX_SET_SIZE:
-                            final_tgt_phrases = copy.deepcopy(temp_tgt_phrases)
+                score = float("inf")
+                best_possible_translation = ""
 
-                    print("All source candidate phrases: ", len(final_tgt_phrases))
+                if len(final_tgt_phrases) < 100:
+                    print("Final target phrases: ", final_tgt_phrases)
+                else:
+                    print("Size of target phrase set more than 100.")
 
-                    new_span_list = list()
-                    for l, span in enumerate(span_list):
-                        start, end = span
-                        orig_start = start
-                        orig_end = end
+                for m, cand_ent in enumerate(candidate_entities):
+                    scores_source_translations = list()
 
-                        start_list = [orig_start]
-                        while tgt_a.tokens[start] in self.stop_word_list:
-                            start += 1
-                            if start == orig_end:
-                                break
-                            start_list.append(start)
+                    for n, possible_translation in enumerate(list(final_tgt_phrases)):
+                        edit_dist_ortho = nltk.edit_distance(cand_ent.lower(), possible_translation.lower())
+                        edit_dist_phonetic = nltk.edit_distance(self.epi.transliterate(cand_ent.lower()),
+                                                                self.epi.transliterate(possible_translation.lower()))
+                        scores_source_translations = (possible_translation,
+                                                      min(edit_dist_ortho, edit_dist_phonetic))
 
-                        end_list = [orig_end]
-                        while tgt_a.tokens[end-1] in self.stop_word_list:
-                            end -= 1
-                            if end == orig_start:
-                                break
-                            end_list.append(end)
+                    scores_source_translations = sorted(scores_source_translations, key=lambda x: x[1])
+                    best_score = scores_source_translations[0][1]
+                    for s in scores_source_translations:
+                        if s[1] == best_score:
+                            match_list[cand_ent].append((k, s[1]))
 
-                        for s in start_list:
-                            for e in end_list:
-                                new_span_list.append((s, e))
+            new_score_list = dict()
+            for cand_ent in match_list:
+                score_list = sorted(match_list[cand_ent], key=lambda x: x[1])
 
-                    best_score = float("inf")
+                new_score_list
 
-                    for l, span in enumerate(new_span_list):
-                        tgt_phrase = " ".join(tgt_a.tokens[span[0]:span[1]])
 
-                        print("Target candidate phrase: ", tgt_phrase)
-
-                        score = float("inf")
-                        best_possible_translation = ""
-
-                        if len(final_tgt_phrases) < 100:
-                            print("Final target phrases: ", final_tgt_phrases)
-                        else:
-                            print("Size of target phrase set more than 100.")
-
-                        for possible_translation in final_tgt_phrases:
-                            edit_dist = nltk.edit_distance(tgt_phrase.lower(), possible_translation.lower())
-                            score = min(score, edit_dist)
-                            if score == edit_dist:
-                                best_possible_translation = possible_translation
-
-                        print("Score: ", score)
-
-                        best_score = min(best_score, score)
-                        if best_score == score:
-                            if span not in score_match:
-                                score_match[span] = dict()
-                            score_match[span][j] = (best_score, best_possible_translation)
-
-                    for span in score_match:
-                        if j in score_match[span]:
-                            if score_match[span][j][0] > best_score:
-                                score_match[span].pop(j)
-
-            print("Final score match: ", score_match)
-            for span in score_match:
-                if score_match[span] != dict():
-                    # max_score = max([v[0] for v in score_match[span].values()])
-                    max_score = min([v[0] for v in score_match[span].values()])
-                    max_indices = [i for i in score_match[span].keys()
-                                   if score_match[span][i][0] == max_score]
-
-                    # Pick the first one.
-                    tag_type = src_a.span_list[max_indices[0]].tag_type
-                    start, end = span
-                    best_span = list(range(start, end))
-                    for ind, sp in enumerate(best_span):
-                        if ind == 0:
-                            prefix = "B"
-                        else:
-                            prefix = "I"
-                        tgt_a.ner_tags[sp] = prefix + "-" + tag_type
-
-            print("######################################################################")
-            print("Target tokens: ", tgt_a.tokens)
-            for ind, tag in enumerate(tgt_a.ner_tags):
-                if tag not in config.allowed_tags:
-                    tgt_a.ner_tags[ind] = config.OUTSIDE_TAG
-            print("Target NER tags: ", tgt_a.ner_tags)
-
-        logging.info("######################################################################")
-        logging.info("Entities with no match: " + str(problematic_entities))
-        logging.info("Number of unique entities with no match: " + str(len(problematic_entities)))
-        logging.info("Number of occurrences of entities with no match: " + str(occur_problem_entities))
-        logging.info("Number of all source entities: " + str(src_entities))
-
-        if ABLATION_STRING == "original" or ABLATION_STRING == "_no_google_" or ABLATION_STRING == "_no_google_v2_":
-            N = len(self.sentence_ids)
-            logging.info("Total documents: " + str(N))
-            logging.info("Potential candidates for problematic entities:")
-            count_pc = 0
-            for pc in problem_children:
-                if problematic_entities[pc] > DISTRIBUTION_OCCURRENCE_THRESHOLD:
-                    count_pc += problematic_entities[pc]
-                if problematic_entities[pc] > 0:
-                    for k, v in problem_children[pc].items():
-                        assert k.lower() in idf
-                        problem_children[pc][k] = v * math.log(float(N / idf[k.lower()]))
-                    logging.info("######################################################################")
-                    logging.info(pc + ": " + str(problem_children[pc].most_common(100)))
-
-            sentences_to_drop = list()
-            for k, val in problematic_sentences.items():
-                to_be_dropped = False
-                for v in val:
-                    if problematic_entities[v[1]] > 0:
-                        to_be_dropped = True
-                if to_be_dropped:
-                    sentences_to_drop.append(k)
-
-            logging.info("Number of problematic entities %d" % len(problematic_entities))
-            logging.info("Number of sentences with at least one problematic entity: %d" %
-                         len(sentences_to_drop))
-
-            path = os.path.join(self.base_path, "problematic_entities_" + DATE_TODAY + ".pkl")
-            with open(path, 'wb') as f:
-                pickle.dump(problematic_entities, f)
-
-            path = os.path.join(self.base_path, "problem_children_" + DATE_TODAY + ".pkl")
-            with open(path, 'wb') as f:
-                pickle.dump(problem_children, f)
-
-            path = os.path.join(self.base_path, "problematic_sentences_" + DATE_TODAY + ".pkl")
-            with open(path, 'wb') as f:
-                pickle.dump(problematic_sentences, f)
-
-            final_candidate_dict = self.get_refined_candidates(problem_children, problematic_entities)
-            checklist = [[False for _ in problematic_sentences[sent]] for sent in problematic_sentences]
-            num_annotation = 0
-            num_annotation += self.tag_problematic_sentences(problematic_sentences, final_candidate_dict,
-                                           problematic_entities, checklist)
-            logging.info("Number of occurrences of problematic entities with count > %d (PC-%d): %d" %
-                         (DISTRIBUTION_OCCURRENCE_THRESHOLD, DISTRIBUTION_OCCURRENCE_THRESHOLD,
-                          count_pc))
-            logging.info("Total number of annotations: " + str(num_annotation))
+            # dummy_list = [-1 for _ in ner_tag_list]
+        #
+        #     entity_candidates = {j: copy.deepcopy(dummy_list) for j in range(len(src_phrases))}
+        #     find_entity_spans(entity_candidates, ner_tag_list)
+        #
+        #     score_match = dict()
+        #     for j in entity_candidates:
+        #         src_entities += 1
+        #         span_list = get_spans(j, entity_candidates[j])
+        #
+        #         tok_set = set([tok.lower() for tok in tgt_a.tokens])
+        #         for tok in tok_set:
+        #             if tok not in idf:
+        #                 idf[tok] = 0
+        #             idf[tok] += 1
+        #
+        #         if span_list == list():
+        #             occur_problem_entities += 1
+        #             if i not in problematic_sentences:
+        #                 problematic_sentences[i] = list()
+        #             problematic_sentences[i].append((j, src_phrases[j]))
+        #
+        #             problematic_entities.update({src_phrases[j]: 1})
+        #             logging.info("######################################################################")
+        #             logging.info("No correspondence found in sentence: " + str(sid))
+        #             logging.info("Source tokens: " + str(src_a.tokens))
+        #             logging.info("Target tokens: " + str(tgt_a.tokens))
+        #             logging.info("Source phrase for which no match found: " + str(src_phrases[j]))
+        #
+        #             if src_phrases[j] not in problem_children:
+        #                 problem_children[src_phrases[j]] = Counter()
+        #
+        #             for tok in tgt_a.tokens:
+        #                 problem_children[src_phrases[j]].update({tok: 1})
+        #
+        #             logging.info("######################################################################")
+        #
+        #         else:
+        #             print("######################################################################")
+        #             print("Source phrase: ", src_phrases[j])
+        #             print("######################################################################")
+        #             temp_tgt_phrases = set()
+        #             all_tgt_phrases = self.tgt_phrase_instance_list[sid][j].tgt_phrase_list
+        #             for k, candidate_phrases in enumerate(all_tgt_phrases):
+        #                 temp_tgt_phrases.update(candidate_phrases)
+        #
+        #             final_tgt_phrases = copy.deepcopy(temp_tgt_phrases)
+        #
+        #             if ABLATION_STRING != "_no_google_v2_":
+        #                 for tgt_phrase in temp_tgt_phrases:
+        #                     if len(final_tgt_phrases) > MAX_SET_SIZE:
+        #                         break
+        #                     if tgt_phrase != all_tgt_phrases[0][0]:
+        #                         permutations = itertools.permutations(tgt_phrase.split(" "))
+        #                         final_tgt_phrases.update([" ".join(x) for x in permutations])
+        #
+        #                 if len(final_tgt_phrases) > 2 * MAX_SET_SIZE:
+        #                     final_tgt_phrases = copy.deepcopy(temp_tgt_phrases)
+        #
+        #             print("All source candidate phrases: ", len(final_tgt_phrases))
+        #
+        #             new_span_list = list()
+        #             for l, span in enumerate(span_list):
+        #                 start, end = span
+        #                 orig_start = start
+        #                 orig_end = end
+        #
+        #                 start_list = [orig_start]
+        #                 while tgt_a.tokens[start] in self.stop_word_list:
+        #                     start += 1
+        #                     if start == orig_end:
+        #                         break
+        #                     start_list.append(start)
+        #
+        #                 end_list = [orig_end]
+        #                 while tgt_a.tokens[end-1] in self.stop_word_list:
+        #                     end -= 1
+        #                     if end == orig_start:
+        #                         break
+        #                     end_list.append(end)
+        #
+        #                 for s in start_list:
+        #                     for e in end_list:
+        #                         new_span_list.append((s, e))
+        #
+        #             best_score = float("inf")
+        #
+        #             for l, span in enumerate(new_span_list):
+        #                 tgt_phrase = " ".join(tgt_a.tokens[span[0]:span[1]])
+        #
+        #                 print("Target candidate phrase: ", tgt_phrase)
+        #
+        #                 score = float("inf")
+        #                 best_possible_translation = ""
+        #
+        #                 if len(final_tgt_phrases) < 100:
+        #                     print("Final target phrases: ", final_tgt_phrases)
+        #                 else:
+        #                     print("Size of target phrase set more than 100.")
+        #
+        #                 for possible_translation in final_tgt_phrases:
+        #                     edit_dist = nltk.edit_distance(tgt_phrase.lower(), possible_translation.lower())
+        #                     score = min(score, edit_dist)
+        #                     if score == edit_dist:
+        #                         best_possible_translation = possible_translation
+        #
+        #                 print("Score: ", score)
+        #
+        #                 best_score = min(best_score, score)
+        #                 if best_score == score:
+        #                     if span not in score_match:
+        #                         score_match[span] = dict()
+        #                     score_match[span][j] = (best_score, best_possible_translation)
+        #
+        #             for span in score_match:
+        #                 if j in score_match[span]:
+        #                     if score_match[span][j][0] > best_score:
+        #                         score_match[span].pop(j)
+        #
+        #     print("Final score match: ", score_match)
+        #     for span in score_match:
+        #         if score_match[span] != dict():
+        #             max_score = max([v[0] for v in score_match[span].values()])
+        #             max_indices = [i for i in score_match[span].keys()
+        #                            if score_match[span][i][0] == max_score]
+        #
+        #             # Pick the first one.
+        #             tag_type = src_a.span_list[max_indices[0]].tag_type
+        #             start, end = span
+        #             best_span = list(range(start, end))
+        #             for ind, sp in enumerate(best_span):
+        #                 if ind == 0:
+        #                     prefix = "B"
+        #                 else:
+        #                     prefix = "I"
+        #                 tgt_a.ner_tags[sp] = prefix + "-" + tag_type
+        #
+        #     print("######################################################################")
+        #     print("Target tokens: ", tgt_a.tokens)
+        #     for ind, tag in enumerate(tgt_a.ner_tags):
+        #         if tag not in config.allowed_tags:
+        #             tgt_a.ner_tags[ind] = config.OUTSIDE_TAG
+        #     print("Target NER tags: ", tgt_a.ner_tags)
+        #
+        # logging.info("######################################################################")
+        # logging.info("Entities with no match: " + str(problematic_entities))
+        # logging.info("Number of unique entities with no match: " + str(len(problematic_entities)))
+        # logging.info("Number of occurrences of entities with no match: " + str(occur_problem_entities))
+        # logging.info("Number of all source entities: " + str(src_entities))
+        #
+        # if ABLATION_STRING == "original" or ABLATION_STRING == "_no_google_" or ABLATION_STRING == "_no_google_v2_":
+        #     N = len(self.sentence_ids)
+        #     logging.info("Total documents: " + str(N))
+        #     logging.info("Potential candidates for problematic entities:")
+        #     count_pc = 0
+        #     for pc in problem_children:
+        #         if problematic_entities[pc] > DISTRIBUTION_OCCURRENCE_THRESHOLD:
+        #             count_pc += problematic_entities[pc]
+        #         if problematic_entities[pc] > 0:
+        #             for k, v in problem_children[pc].items():
+        #                 assert k.lower() in idf
+        #                 problem_children[pc][k] = v * math.log(float(N / idf[k.lower()]))
+        #             logging.info("######################################################################")
+        #             logging.info(pc + ": " + str(problem_children[pc].most_common(100)))
+        #
+        #     sentences_to_drop = list()
+        #     for k, val in problematic_sentences.items():
+        #         to_be_dropped = False
+        #         for v in val:
+        #             if problematic_entities[v[1]] > 0:
+        #                 to_be_dropped = True
+        #         if to_be_dropped:
+        #             sentences_to_drop.append(k)
+        #
+        #     logging.info("Number of problematic entities %d" % len(problematic_entities))
+        #     logging.info("Number of sentences with at least one problematic entity: %d" %
+        #                  len(sentences_to_drop))
+        #
+        #     path = os.path.join(self.base_path, "problematic_entities_" + DATE_TODAY + ".pkl")
+        #     with open(path, 'wb') as f:
+        #         pickle.dump(problematic_entities, f)
+        #
+        #     path = os.path.join(self.base_path, "problem_children_" + DATE_TODAY + ".pkl")
+        #     with open(path, 'wb') as f:
+        #         pickle.dump(problem_children, f)
+        #
+        #     path = os.path.join(self.base_path, "problematic_sentences_" + DATE_TODAY + ".pkl")
+        #     with open(path, 'wb') as f:
+        #         pickle.dump(problematic_sentences, f)
+        #
+        #     final_candidate_dict = self.get_refined_candidates(problem_children, problematic_entities)
+        #     checklist = [[False for _ in problematic_sentences[sent]] for sent in problematic_sentences]
+        #     num_annotation = 0
+        #     num_annotation += self.tag_problematic_sentences(problematic_sentences, final_candidate_dict,
+        #                                    problematic_entities, checklist)
+        #     logging.info("Number of occurrences of problematic entities with count > %d (PC-%d): %d" %
+        #                  (DISTRIBUTION_OCCURRENCE_THRESHOLD, DISTRIBUTION_OCCURRENCE_THRESHOLD,
+        #                   count_pc))
+        #     logging.info("Total number of annotations: " + str(num_annotation))
 
     def get_refined_candidates(self, problem_children, problematic_entities):
         final_candidate_dict = dict()
@@ -869,13 +924,8 @@ class Translation:
         return True
 
     def prepare_train_file(self):
-        if self.tgt_lang in ["es", "nl"]:
-            capitalize = True
-        else:
-            capitalize = False
-        self.tgt_annotated_list = post_process_annotations(self.tgt_annotated_list, self.stop_word_list,
-                                                           capitalize=capitalize)
-        file_path = os.path.join(self.base_path, self.args.translate_fname + "_affix-match_blah_" +
+        self.tgt_annotated_list = post_process_annotations(self.tgt_annotated_list, self.stop_word_list)
+        file_path = os.path.join(self.base_path, self.args.translate_fname + "_affix-match_" +
                                  str(MATCHING_SCORE_THRESHOLD) + ABLATION_STRING + datetime.today().strftime("%d-%m-%Y"))
         if self.tgt_lang in ["hi", "ta"]:
             remove_misc = True
@@ -972,8 +1022,13 @@ def _find_match(reference, hypothesis, epi, stop_word_list, transliterate=False)
 
 
 def _find_match_helper(reference, hypothesis, epi, stop_word_list, transliterate=False):
+    # print("Reference: ", reference, "Hypothesis: ", hypothesis)
+
     is_stop_word = False
+    # print(stop_word_list)
     if (hypothesis in stop_word_list) or (reference in stop_word_list):
+        # print("HELLLLLLLLLLOOOOOOOOOOO")
+        # print("Hypothesis: ", hypothesis, ", reference: ", reference)
         is_stop_word = True
 
     if transliterate:
@@ -1000,6 +1055,11 @@ def _find_match_helper(reference, hypothesis, epi, stop_word_list, transliterate
                     break
             score -= 1
 
+    # if (hypothesis in stop_word_list) or (reference in stop_word_list):
+    #     print("WOOOOOOOOOOOOOOOOOOOOOOOOOOO")
+    #     print("Hypothesis: ", hypothesis, ", reference: ", reference)
+    #     print(score)
+    #     print(ret_val)
     return min(float(score / len(reference)), float(score / L)), ret_val
 
 

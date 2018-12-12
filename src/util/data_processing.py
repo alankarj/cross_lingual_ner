@@ -136,7 +136,7 @@ def write_to_file(sentence_ids, list_annotated_list, file_path):
                 csv_writer.writerow(write_str)
 
 
-def prepare_train_file(annotated_list, drop_list, file_path):
+def prepare_train_file(annotated_list, drop_list, file_path, remove_misc=False):
     if drop_list == None:
         drop_list = []
 
@@ -145,7 +145,13 @@ def prepare_train_file(annotated_list, drop_list, file_path):
             if i not in drop_list:
                 if len(annotation.tokens) >= 0:
                     for j, token in enumerate(annotation.tokens):
-                        write_str = token + " " + annotation.ner_tags[j] + "\n"
+                        if remove_misc:
+                            if annotation.ner_tags[j].endswith("MISC"):
+                                write_str = token + " " + "O" + "\n"
+                            else:
+                                write_str = token + " " + annotation.ner_tags[j] + "\n"
+                        else:
+                            write_str = token + " " + annotation.ner_tags[j] + "\n"
                         if len(write_str.split(" ")) < 2:
                             write_str = '-' + write_str
                         assert len(write_str.split()) == 2
