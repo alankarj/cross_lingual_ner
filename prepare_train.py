@@ -101,7 +101,12 @@ def main():
 
     assert len(src_sentence_list) == len(tgt_sentence_list)
 
-    tgt_token_list = [data_translation.get_clean_tokens(tgt_sentence) for tgt_sentence in tgt_sentence_list]
+    if args.tgt_lang == "zh" or tgt_lang == "ar":
+        use_corenlp = True
+    else:
+        use_corenlp = False
+
+    tgt_token_list = [data_translation.get_clean_tokens(tgt_sentence, use_corenlp) for tgt_sentence in tgt_sentence_list]
 
     if args.tgt_lang == "hi":
         for i, token_list in enumerate(tgt_token_list):
@@ -175,6 +180,8 @@ def main():
                     stop_word_list = config.stop_word_list_hi
                 elif args.tgt_lang == "ta":
                     stop_word_list = config.stop_word_list_ta
+                elif args.tgt_lang == "zh":
+                    stop_word_list = config.stop_word_list_zh
                 else:
                     stop_word_list = set(stopwords.words(config.stop_word_dict[args.tgt_lang]))
 

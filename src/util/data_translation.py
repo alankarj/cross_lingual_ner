@@ -10,7 +10,8 @@ import copy
 import itertools
 import string
 import epitran
-
+from nltk.parse.corenlp import CoreNLPParser
+import copy
 from googleapiclient.discovery import build
 from src import config
 from src.util import data_processing
@@ -22,14 +23,14 @@ import re
 
 random.seed(config.SEED)
 
-MATCHING_SCORE_THRESHOLD = 0.25
+MATCHING_SCORE_THRESHOLD = 0.66
 MAX_SET_SIZE = 1000
 MOST_COMMON = 4
 DISTRIBUTION_OCCURRENCE_THRESHOLD = 2
 ABLATION_STRING = "original"
 
-# DATE_TODAY = datetime.today().strftime("%d-%m-%Y")
-DATE_TODAY = "28-11-2018"
+DATE_TODAY = datetime.today().strftime("%d-%m-%Y")
+# DATE_TODAY = "28-11-2018"
 print("Today's date: ", DATE_TODAY)
 
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
@@ -56,6 +57,10 @@ class Translation:
         self.tgt_lang = args.tgt_lang
         self.epi = config.get_epi(self.tgt_lang)
         # self.src_epi = epitran.Epitran("eng-Latn")
+        if self.tgt_lang == "zh" or self.tgt_lang == "ar":
+            self.use_corenlp = True
+        else:
+            self.use_corenlp = False
 
         if self.tgt_lang in config.stop_word_dict:
             self.stop_word_list = set(stopwords.words(config.stop_word_dict[self.tgt_lang]))
@@ -63,6 +68,8 @@ class Translation:
             self.stop_word_list = config.stop_word_list_hi
         elif self.tgt_lang == "ta":
             self.stop_word_list = config.stop_word_list_ta
+        elif self.tgt_lang == "zh":
+            self.stop_word_list = config.stop_word_list_zh
         else:
             raise ValueError("Language %s stop word list not available." % self.tgt_lang)
 
@@ -117,8 +124,8 @@ class Translation:
             max_iter = int(math.ceil(num_sentences/batch_size))
             for i in range(max_iter):
 
-                if i < 105:
-                    continue
+                # if i < 107:
+                #     continue
 
                 beg = i * batch_size
                 end = (i + 1) * batch_size
@@ -127,10 +134,15 @@ class Translation:
                     print("Batch ID: %d" % i)
                     print("From %d to %d..." % (beg, end))
 
+                if self.args.tgt_lang == "zh":
+                    tgt_lang = "zh-CN"
+                else:
+                    tgt_lang = self.args.tgt_lang
+
                 src_sentences = src_sentence_list[beg:end]
                 tgt_sentence_list.extend(get_google_translations(src_sentences,
                                                                  self.args.src_lang,
-                                                                 self.args.tgt_lang,
+                                                                 tgt_lang,
                                                                  self.args.api_key))
                 with open(tgt_sentence_path, 'wb') as f:
                     pickle.dump(tgt_sentence_list, f)
@@ -139,12 +151,21 @@ class Translation:
         if self.args.trans_sent >= 1:
             tgt_sentence_list = pickle.load(open(tgt_sentence_path, 'rb'))
 
+
+            # src_phrase_list = pickle.load(open(src_phrase_path, 'rb'))
+            # tgt_phrase_list = pickle.load(open(tgt_phrase_path, 'rb'))
+            # print("Length of source phrase list: ", len(src_phrase_list))
+            # print("Length of target phrase list: ", len(tgt_phrase_list))
+
             src_phrase_list = list()
             print("Length of source phrase list: ", len(src_phrase_list))
             tgt_phrase_list = list()
             print("Length of target phrase list: ", len(tgt_phrase_list))
 
             for i, sid in enumerate(sentence_ids):
+                # if i < 11743:
+                #     continue
+
                 if self.args.verbosity >= 1:
                     print("######################################################################")
                     print("Sentence-%d" % i)
@@ -152,7 +173,7 @@ class Translation:
                 a = self.src_annotated_list[sid]
                 span_list = a.span_list
 
-                tgt_tokens = get_clean_tokens(tgt_sentence_list[i])
+                tgt_tokens = get_clean_tokens(tgt_sentence_list[i], self.use_corenlp)
                 if self.args.verbosity == 2:
                     print("Source tokens: ", a.tokens)
                     print("Tgt tokens: ", tgt_tokens)
@@ -202,7 +223,8 @@ class Translation:
         self.src_phrase_list = src_phrase_list
 
         for i, src_phrase in enumerate(self.src_phrase_list):
-            assert len(src_phrase) == len(self.tgt_phrase_list[i])
+            assert len(self.src_phrase_list[i]) == len(self.tgt_phrase_list[i])
+
 
         # for i, src_a in enumerate(self.src_annotated_list):
         #     if src_a.tokens[0] == "Abu":
@@ -316,7 +338,7 @@ class Translation:
                 sentence = sentence.replace("&#39;", "\'")
                 sentence = sentence.replace(" &amp; ", "&")
                 tgt_annotation = data_processing.Annotation()
-                tgt_annotation.tokens = get_clean_tokens(sentence)
+                tgt_annotation.tokens = get_clean_tokens(sentence, self.use_corenlp)
 
                 if self.tgt_lang == "hi":
                     for j, token in enumerate(tgt_annotation.tokens):
@@ -340,7 +362,7 @@ class Translation:
         temp_suffix = ABLATION_STRING
 
         path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_listblah_" + str(MATCHING_SCORE_THRESHOLD) + temp_suffix + self.suffix + DATE_TODAY + "_partial" + ".pkl")
+                            "_annotated_list_" + str(MATCHING_SCORE_THRESHOLD) + temp_suffix + self.suffix + DATE_TODAY + "_partial" + ".pkl")
 
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
@@ -354,7 +376,7 @@ class Translation:
 
         temp_suffix = ABLATION_STRING
         path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_listblah_" + str(MATCHING_SCORE_THRESHOLD) + temp_suffix + self.suffix + DATE_TODAY + ".pkl")
+                            "_annotated_list_" + str(MATCHING_SCORE_THRESHOLD) + temp_suffix + self.suffix + DATE_TODAY + ".pkl")
 
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
@@ -910,12 +932,21 @@ def get_google_translations(src_sentence_list, src_lang, tgt_lang, api_key):
     tgt_sentence_list = [t['translatedText'] for t in tgt_dict['translations']]
     return tgt_sentence_list
 
+def tokenize_using_corenlp(text):
+    corenlp_parser = CoreNLPParser('http://localhost:9001', encoding='utf8')
+    result = corenlp_parser.api_call(text, {'annotators': 'tokenize,ssplit'})
+    tokens = [token['originalText'] or token['word'] for sentence in result['sentences'] for token in
+              sentence['tokens']]
+    return tokens
 
-def get_clean_tokens(sentence):
+def get_clean_tokens(sentence, use_corenlp=True):
     for entity in html.entities.html5:
         sentence = sentence.replace("&" + entity + ";", html.entities.html5[entity])
 
-    tokens = nltk.word_tokenize(sentence)
+    if use_corenlp:
+        tokens = tokenize_using_corenlp(sentence)
+    else:
+        tokens = nltk.word_tokenize(sentence)
 
     final_tokens = list()
     ampersand_found = False
@@ -1031,6 +1062,7 @@ def read_lexicon(src_file_path, tgt_file_path):
         lexicon = dict()
         for row in rows:
             row = row.rstrip("\n").split(" ")
+            print(row)
             src_word = row[0]
             tgt_word = row[1]
             if src_word not in lexicon:
