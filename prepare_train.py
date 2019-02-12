@@ -101,7 +101,7 @@ def main():
 
     assert len(src_sentence_list) == len(tgt_sentence_list)
 
-    if args.tgt_lang == "zh" or tgt_lang == "ar":
+    if args.tgt_lang == "zh" or args.tgt_lang == "ar":
         use_corenlp = True
     else:
         use_corenlp = False
