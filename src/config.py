@@ -3,8 +3,8 @@ import epitran
 from epitran import backoff
 
 DATA_FOLDER = 'data'
-SRC_LANGS = ['en']
-TGT_LANGS = ['hi', 'es', 'de', 'nl', 'ta', 'zh', 'ar']
+SRC_LANGS = ['en', 'hi']
+TGT_LANGS = ['hi', 'es', 'de', 'nl', 'ta', 'zh', 'ar', 'en']
 TRANSLATE_FNAMES = ['train', 'dev', 'test']
 ALIGN_HEURISTICS = ['fast-align', 'affix-match']
 ALL_PARTIAL_SUFFIXES = ['partial', 'all']
@@ -42,6 +42,8 @@ BATCH_SIZE = 128
 LEXICON_FILE_NAMES = ["lexicon_ground-truth"]
 MATCHING_ALGOS = ["token_match", "ipa_match"]
 
+TAGGER_FILE_PATH = "/Users/alankarjain/Documents/code/spring_2019/tagger"
+
 
 char_to_numeric = {'O': 0, 'LOC': 1, 'MISC': 2, 'ORG': 3, 'PER': 4}
 
@@ -56,14 +58,16 @@ gold_test_dict["en"] = {
     "PER": 6600
 }
 
-stop_word_dict = {"es": "spanish", "de": "german", "nl": "dutch", "ar": "arabic"}
+stop_word_dict = {"es": "spanish", "de": "german", "nl": "dutch", "ar": "arabic",
+                  "en": "english"}
 epi_dict = {"es": "spa-Latn",
             "de": "deu-Latn",
             "nl": "nld-Latn",
             "ta": "tam-Taml",
             "hi": "hin-Deva",
             "zh": "cmn-Hans",
-            "ar": "ara-Arab"
+            "ar": "ara-Arab",
+            "en": "eng-Latn"
             }
 stop_word_list_hi = ["अंदर","अत","अदि","अप","अपना","अपनि","अपनी","अपने","अभि","अभी","आदि","आप","इंहिं","इंहें",
                      "इंहों","इतयादि","इत्यादि","इन","इनका","इन्हीं","इन्हें","इन्हों","इस","इसका","इसकि","इसकी","इसके",

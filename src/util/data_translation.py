@@ -241,7 +241,8 @@ class Translation:
         lexicons = list()
         tgt_phrase_instance_list = list()
 
-        tgt_phrase_instance_list_path = os.path.join(self.base_path, "tgt_phrase_instance_list.pkl")
+        tgt_phrase_instance_list_path = os.path.join(self.base_path, self.args.translate_fname
+        + "_tgt_phrase_instance_list.pkl")
         if os.path.exists(tgt_phrase_instance_list_path):
             self.tgt_phrase_instance_list = pickle.load(open(tgt_phrase_instance_list_path, 'rb'))
 
@@ -458,6 +459,13 @@ class Translation:
                         for l, tgt_phrase in enumerate(tgt_phrases):
                             if l == 100:
                                 break
+                            print(src_a.tokens)
+
+                            for span in src_a.span_list:
+                                print(span.beg, span.end)
+
+                            print(len(src_a.span_list))
+                            print("Index: ", j)
                             tag_type = src_a.span_list[j].tag_type
                             tgt_tokens = tgt_phrase.split(" ")
 
