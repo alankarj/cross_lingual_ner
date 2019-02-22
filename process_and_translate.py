@@ -103,14 +103,13 @@ def main():
     annotated_list_file_path = os.path.join(args.src_file_path, file_name + ".pkl")
 
     if args.pre_process == 1:
-        annotated_data = data_processing.AnnotatedData(args.src_file_path, lang=args.src_lang,
-                                                       verbosity=args.verbosity)
+        file_path = os.path.join(args.src_file_path, args.translate_fname)
+        annotated_data = data_processing.AnnotatedData(file_path, lang=None, verbosity=args.verbosity)
         annotated_list = annotated_data.process_data()
         with open(annotated_list_file_path, 'wb') as f:
             pickle.dump(annotated_list, f)
-
-        write_file_path = os.path.join(args.src_file_path, file_name + ".tsv")
-        data_processing.write_to_file([annotated_list], write_file_path)
+        # write_file_path = os.path.join(args.src_file_path, file_name + ".tsv")
+        # data_processing.write_to_file([annotated_list], write_file_path)
     else:
         annotated_list = pickle.load(open(annotated_list_file_path, 'rb'))
 

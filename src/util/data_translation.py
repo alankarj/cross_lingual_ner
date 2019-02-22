@@ -124,8 +124,8 @@ class Translation:
             max_iter = int(math.ceil(num_sentences/batch_size))
             for i in range(max_iter):
 
-                # if i < 107:
-                #     continue
+                if i < 96:
+                    continue
 
                 beg = i * batch_size
                 end = (i + 1) * batch_size
@@ -151,20 +151,19 @@ class Translation:
         if self.args.trans_sent >= 1:
             tgt_sentence_list = pickle.load(open(tgt_sentence_path, 'rb'))
 
-
-            # src_phrase_list = pickle.load(open(src_phrase_path, 'rb'))
-            # tgt_phrase_list = pickle.load(open(tgt_phrase_path, 'rb'))
-            # print("Length of source phrase list: ", len(src_phrase_list))
-            # print("Length of target phrase list: ", len(tgt_phrase_list))
-
-            src_phrase_list = list()
+            src_phrase_list = pickle.load(open(src_phrase_path, 'rb'))
+            tgt_phrase_list = pickle.load(open(tgt_phrase_path, 'rb'))
             print("Length of source phrase list: ", len(src_phrase_list))
-            tgt_phrase_list = list()
             print("Length of target phrase list: ", len(tgt_phrase_list))
 
+            # src_phrase_list = list()
+            # print("Length of source phrase list: ", len(src_phrase_list))
+            # tgt_phrase_list = list()
+            # print("Length of target phrase list: ", len(tgt_phrase_list))
+            #
             for i, sid in enumerate(sentence_ids):
-                # if i < 11743:
-                #     continue
+                if i < 1876:
+                    continue
 
                 if self.args.verbosity >= 1:
                     print("######################################################################")
@@ -173,10 +172,10 @@ class Translation:
                 a = self.src_annotated_list[sid]
                 span_list = a.span_list
 
-                tgt_tokens = get_clean_tokens(tgt_sentence_list[i], self.use_corenlp)
+                # tgt_tokens = get_clean_tokens(tgt_sentence_list[i], self.use_corenlp)
                 if self.args.verbosity == 2:
                     print("Source tokens: ", a.tokens)
-                    print("Tgt tokens: ", tgt_tokens)
+                    # print("Tgt tokens: ", tgt_tokens)
 
                 src_phrase_list.append(list())
                 for span in span_list:
@@ -223,6 +222,8 @@ class Translation:
         self.src_phrase_list = src_phrase_list
 
         for i, src_phrase in enumerate(self.src_phrase_list):
+            print(self.src_phrase_list[i])
+            print(self.tgt_phrase_list[i])
             assert len(self.src_phrase_list[i]) == len(self.tgt_phrase_list[i])
 
 
@@ -630,7 +631,7 @@ class Translation:
                         idf[tok] = 0
                     idf[tok] += 1
 
-                if span_list == list():
+                if span_list == list() or len(src_phrases[j].split(" ")) >= 10:
                     occur_problem_entities += 1
                     if i not in problematic_sentences:
                         problematic_sentences[i] = list()
@@ -936,7 +937,7 @@ class Match:
 
 def get_google_translations(src_sentence_list, src_lang, tgt_lang, api_key):
     service = build('translate', 'v2', developerKey=api_key)
-    tgt_dict = service.translations().list(source=src_lang, target=tgt_lang, q=src_sentence_list).execute()
+    tgt_dict = service.translations().list(source="en", target=tgt_lang, q=src_sentence_list).execute()
     tgt_sentence_list = [t['translatedText'] for t in tgt_dict['translations']]
     return tgt_sentence_list
 
@@ -966,9 +967,10 @@ def get_clean_tokens(sentence, use_corenlp=True):
             continue
 
         elif token == "&" and i != 0 and i != len(tokens)-1:
-            final_tokens.pop()
-            final_tokens.append(tokens[i-1] + "&" + tokens[i+1])
-            ampersand_found = True
+            if len(final_tokens) > 0:
+                final_tokens.pop()
+                final_tokens.append(tokens[i-1] + "&" + tokens[i+1])
+                ampersand_found = True
 
         elif token == "." and i != 0 and i != len(tokens) - 1:
             if prior_period_index == -float("inf") or i - prior_period_index > 2:
@@ -976,9 +978,11 @@ def get_clean_tokens(sentence, use_corenlp=True):
                 final_tokens.pop()
                 final_tokens.append(tokens[i - 1] + ".")
             else:
-                final_tokens.pop()
-                final_tokens.pop()
-                final_tokens.append(tokens[i - 3] + "." + tokens[i - 1] + ".")
+                if len(final_tokens) > 0:
+                    final_tokens.pop()
+                    if len(final_tokens) > 0:
+                        final_tokens.pop()
+                        final_tokens.append(tokens[i - 3] + "." + tokens[i - 1] + ".")
 
         else:
             if token == "``" or token == "''":
