@@ -5,7 +5,7 @@ from argparse import ArgumentParser
 from src.util import data_processing, data_translation, annotation_evaluation
 from src import config
 import pickle
-
+import string
 from flair.data import Sentence
 from flair.models import SequenceTagger
 
@@ -104,6 +104,35 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def get_ner_tags(tokens, flair_entities, table):
+    ner_tags = ["O" for _ in tokens]
+
+    if flair_entities != []:
+        search_index = 0
+        entity_tokens, entity_type = get_entity(flair_entities, search_index)
+        i = 0
+        while i < len(tokens):
+            if tokens[i] == entity_tokens[0].translate(table):
+                ner_tags[i] = "B-" + entity_type
+                for j in range(i+1, i + len(entity_tokens), 1):
+                    ner_tags[j] = "I-" + entity_type
+                search_index += 1
+                if search_index == len(flair_entities):
+                    break
+                entity_tokens, entity_type = get_entity(flair_entities, search_index)
+                i += len(entity_tokens)
+            else:
+                i += 1
+    return ner_tags
+
+
+def get_entity(flair_entities, search_index):
+    entity = flair_entities[search_index]
+    entity_tokens = entity['text'].split(" ")
+    entity_type = entity['type']
+    return entity_tokens, entity_type
+
+
 def main():
     args = parse_arguments()
     verify_arguments(args)
@@ -132,8 +161,8 @@ def main():
                                     for sid in sentence_ids]
 
         pseudo_tgt_sentence_path = os.path.join(base_path,
-                                                args.translate_fname + '_' + "all" +
-                                                config.PKL_EXT)
+                                                args.translate_fname + '-' + args.src_lang +
+                                                "_all" + config.PKL_EXT)
         with open(pseudo_tgt_sentence_path, 'wb') as f:
             pickle.dump(pseudo_tgt_sentence_list, f)
 
@@ -192,20 +221,26 @@ def main():
         #         ner_tag_list.append(ner_tags)
 
         tagger = SequenceTagger.load('ner')
+        table = str.maketrans({key: None for key in string.punctuation})
+        tgt_base_path = os.path.join(args.data_path, args.tgt_lang)
+        tgt_full_path = os.path.join(tgt_base_path, args.translate_fname + "-" + args.src_lang + ".pkl")
+
         for i, tgt_a in enumerate(tgt_annotated_list):
             print("######################################################################")
             print("Sentence: ", i)
             sent = Sentence(tgt_sentence_list[i])
             print("Tokens: ", tgt_a.tokens)
             tagger.predict(sent)
-            entities = sent.to_dict(tag_type='ner')['entities']
-            print(entities)
-            # tgt_a.ner_tags = ner_tag_list[i]
-            # tgt_a.span_list = data_processing.get_entity_spans(tgt_a.ner_tags)
-            # print("NER tags: ", tgt_a.ner_tags)
+            flair_entities = sent.to_dict(tag_type='ner')['entities']
+            # print(flair_entities)
+            # print(get_ner_tags(tgt_a.tokens, flair_entities, table))
+            tgt_a.ner_tags = get_ner_tags(tgt_a.tokens, flair_entities, table)
+            print("Entities: ", tgt_a.ner_tags)
+            tgt_a.span_list = data_processing.get_entity_spans(tgt_a.ner_tags)
+            print("NER tags: ", tgt_a.ner_tags)
 
-        # with open(path, 'wb') as f:
-        #     pickle.dump(tgt_annotated_list, f)
+        with open(tgt_full_path, 'wb') as f:
+            pickle.dump(tgt_annotated_list, f)
 
 
 if __name__ == '__main__':
