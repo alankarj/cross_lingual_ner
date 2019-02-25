@@ -10,6 +10,7 @@ mnist_v2.pdf
 mnist_v3.pdf
 *.DS_Store
 chinese_tokenization
+logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

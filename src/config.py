@@ -3,7 +3,7 @@ import epitran
 from epitran import backoff
 
 DATA_FOLDER = 'data'
-SRC_LANGS = ['en', 'hi', 'eno']
+SRC_LANGS = ['en', 'hi', 'eno', 'ml', 'de']
 TGT_LANGS = ['hi', 'es', 'de', 'nl', 'ta', 'zh', 'ar', 'en']
 TRANSLATE_FNAMES = ['train', 'dev', 'test']
 ALIGN_HEURISTICS = ['fast-align', 'affix-match']

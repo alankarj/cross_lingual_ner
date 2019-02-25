@@ -6,12 +6,12 @@ import numpy as np
 
 random.seed(0)
 
-TGT_LANG = "tamil"
+TGT_LANG = "malayalam"
 TRAIN_FRAC = float(2/3)
 DEV_FRAC = float(1/2)
 TEST_FRAC = float(1/2)
 TAG_MAP = {"PERSON": "PER", "LOCATION": "LOC", "ORGANIZATION": "ORG"}
-LANG_CODE_MAP = {"hindi": "hi", "tamil": "ta"}
+LANG_CODE_MAP = {"hindi": "hi", "tamil": "ta", "malayalam": "ml"}
 
 
 def prepare_all_files(token_list, tag_list, file_path):

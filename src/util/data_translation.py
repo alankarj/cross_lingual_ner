@@ -23,11 +23,14 @@ import re
 
 random.seed(config.SEED)
 
-MATCHING_SCORE_THRESHOLD = 0.66
+MATCHING_SCORE_THRESHOLD = 0.75
 MAX_SET_SIZE = 1000
 MOST_COMMON = 4
 DISTRIBUTION_OCCURRENCE_THRESHOLD = 2
 ABLATION_STRING = "original"
+
+SENT_ITER = -1
+PHRASE_ITER = -1
 
 DATE_TODAY = datetime.today().strftime("%d-%m-%Y")
 # DATE_TODAY = "28-11-2018"
@@ -124,7 +127,7 @@ class Translation:
             max_iter = int(math.ceil(num_sentences/batch_size))
             for i in range(max_iter):
 
-                if i < 96:
+                if i < SENT_ITER:
                     continue
 
                 beg = i * batch_size
@@ -151,18 +154,20 @@ class Translation:
         if self.args.trans_sent >= 1:
             tgt_sentence_list = pickle.load(open(tgt_sentence_path, 'rb'))
 
-            src_phrase_list = pickle.load(open(src_phrase_path, 'rb'))
-            tgt_phrase_list = pickle.load(open(tgt_phrase_path, 'rb'))
-            print("Length of source phrase list: ", len(src_phrase_list))
-            print("Length of target phrase list: ", len(tgt_phrase_list))
+            if PHRASE_ITER < 0:
+                src_phrase_list = list()
+                print("Length of source phrase list: ", len(src_phrase_list))
+                tgt_phrase_list = list()
+                print("Length of target phrase list: ", len(tgt_phrase_list))
 
-            # src_phrase_list = list()
-            # print("Length of source phrase list: ", len(src_phrase_list))
-            # tgt_phrase_list = list()
-            # print("Length of target phrase list: ", len(tgt_phrase_list))
-            #
+            else:
+                src_phrase_list = pickle.load(open(src_phrase_path, 'rb'))
+                tgt_phrase_list = pickle.load(open(tgt_phrase_path, 'rb'))
+                print("Length of source phrase list: ", len(src_phrase_list))
+                print("Length of target phrase list: ", len(tgt_phrase_list))
+
             for i, sid in enumerate(sentence_ids):
-                if i < 1876:
+                if i < PHRASE_ITER:
                     continue
 
                 if self.args.verbosity >= 1:
@@ -225,7 +230,6 @@ class Translation:
             print(self.src_phrase_list[i])
             print(self.tgt_phrase_list[i])
             assert len(self.src_phrase_list[i]) == len(self.tgt_phrase_list[i])
-
 
         # for i, src_a in enumerate(self.src_annotated_list):
         #     if src_a.tokens[0] == "Abu":
@@ -937,7 +941,7 @@ class Match:
 
 def get_google_translations(src_sentence_list, src_lang, tgt_lang, api_key):
     service = build('translate', 'v2', developerKey=api_key)
-    tgt_dict = service.translations().list(source="en", target=tgt_lang, q=src_sentence_list).execute()
+    tgt_dict = service.translations().list(source=src_lang, target=tgt_lang, q=src_sentence_list).execute()
     tgt_sentence_list = [t['translatedText'] for t in tgt_dict['translations']]
     return tgt_sentence_list
 

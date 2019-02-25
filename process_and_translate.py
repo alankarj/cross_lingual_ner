@@ -116,16 +116,17 @@ def main():
     with open(os.path.join(args.data_path, args.api_key_fname), 'r', encoding='utf-8') as f:
         args.api_key = f.read().strip('\n')
 
-    # base_path = os.path.join(args.data_path, args.src_lang + "-" + args.tgt_lang)
-    # src_file_path = os.path.join(base_path, "lexicon_ground-truth.txt")
-    # tgt_file_path = os.path.join(base_path, "lexicon_ground-truth.pkl")
-    # data_translation.read_lexicon(src_file_path, tgt_file_path)
-
     translation = data_translation.Translation(annotated_list, args)
     translation.translate_data()
-    translation.prepare_mega_tgt_phrase_list(calc_count_found=False)
-    translation.get_tgt_annotations_new()
-    translation.prepare_train_file()
+    if args.trans_sent == 0:
+        base_path = os.path.join(args.data_path, args.src_lang + "-" + args.tgt_lang)
+        src_file_path = os.path.join(base_path, "lexicon_ground-truth.txt")
+        tgt_file_path = os.path.join(base_path, "lexicon_ground-truth.pkl")
+        data_translation.read_lexicon(src_file_path, tgt_file_path)
+
+        translation.prepare_mega_tgt_phrase_list(calc_count_found=False)
+        translation.get_tgt_annotations_new()
+        translation.prepare_train_file()
 
     # translation = data_translation_phrase.Translation(annotated_list, args)
     # translation.translate_data()
