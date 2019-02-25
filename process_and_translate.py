@@ -14,8 +14,8 @@ def verify_arguments(args):
         raise ValueError(val_error_msg(args.src_lang, 'src_lang') % args.src_lang)
     if args.tgt_lang not in config.TGT_LANGS:
         raise ValueError(val_error_msg(args.tgt_lang, 'tgt_lang') % args.tgt_lang)
-    if args.translate_fname not in config.TRANSLATE_FNAMES:
-        raise ValueError(val_error_msg(args.translate_fname, 'translate_fname') % args.translate_fname)
+    # if args.translate_fname not in config.TRANSLATE_FNAMES:
+    #     raise ValueError(val_error_msg(args.translate_fname, 'translate_fname') % args.translate_fname)
     if args.pre_process not in [0, 1]:
         raise ValueError(val_error_msg(args.pre_process, 'pre_process') % args.pre_process)
     if args.trans_sent not in [0, 1, 2]:

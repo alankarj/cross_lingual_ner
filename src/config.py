@@ -5,7 +5,7 @@ from epitran import backoff
 DATA_FOLDER = 'data'
 SRC_LANGS = ['en', 'hi', 'eno', 'ml', 'de', 'es', 'nl', 'ta', 'zh']
 TGT_LANGS = ['hi', 'es', 'de', 'nl', 'ta', 'zh', 'ar', 'en']
-TRANSLATE_FNAMES = ['train', 'dev', 'test']
+# TRANSLATE_FNAMES = ['train', 'dev', 'test']
 ALIGN_HEURISTICS = ['fast-align', 'affix-match']
 ALL_PARTIAL_SUFFIXES = ['partial', 'all']
 
