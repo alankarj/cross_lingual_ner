@@ -6,6 +6,9 @@ from src.util import data_processing, data_translation, annotation_evaluation
 from src import config
 import pickle
 
+from flair.data import Sentence
+from flair.models import SequenceTagger
+
 random.seed(config.SEED)
 
 
@@ -118,20 +121,21 @@ def main():
         annotated_list = annotated_data.process_data()
         with open(annotated_list_file_path, 'wb') as f:
             pickle.dump(annotated_list, f)
-
-        # write_file_path = os.path.join(args.src_file_path, file_name + ".tsv")
-        # data_processing.write_to_file([annotated_list], write_file_path)
     else:
         annotated_list = pickle.load(open(annotated_list_file_path, 'rb'))
 
+        # Store these sentences in the <tgt>-<src> folder for use later in annotation projection.
         base_path = os.path.join(args.data_path, args.tgt_lang + "-" + args.src_lang)
-        sentence_ids = list(range(len(annotated_list)))
-        tgt_sentence_list = [' '.join(annotated_list[sid].tokens) for sid in sentence_ids]
 
-        tgt_sentence_path = os.path.join(base_path, args.translate_fname + '_' + "all" +
-                                         config.PKL_EXT)
-        with open(tgt_sentence_path, 'wb') as f:
-            pickle.dump(tgt_sentence_list, f)
+        sentence_ids = list(range(len(annotated_list)))
+        pseudo_tgt_sentence_list = [' '.join(annotated_list[sid].tokens)
+                                    for sid in sentence_ids]
+
+        pseudo_tgt_sentence_path = os.path.join(base_path,
+                                                args.translate_fname + '_' + "all" +
+                                                config.PKL_EXT)
+        with open(pseudo_tgt_sentence_path, 'wb') as f:
+            pickle.dump(pseudo_tgt_sentence_list, f)
 
     with open(os.path.join(args.data_path, args.api_key_fname), 'r', encoding='utf-8') as f:
         args.api_key = f.read().strip('\n')
@@ -168,33 +172,40 @@ def main():
 
         print("Length of target annotated list: ", len(tgt_annotated_list))
 
-        input_tagger_file_path = os.path.join(config.TAGGER_FILE_PATH, "input_" +
-                                              args.translate_fname + ".txt")
-        prepare_tagger_input_file(input_tagger_file_path, tgt_annotated_list)
+        # input_tagger_file_path = os.path.join(config.TAGGER_FILE_PATH, "input_" +
+        #                                       args.translate_fname + ".txt")
+        # prepare_tagger_input_file(input_tagger_file_path, tgt_annotated_list)
+        #
+        # output_tagger_file_path = os.path.join(config.TAGGER_FILE_PATH, "output_" +
+        #                                        args.translate_fname + ".txt")
+        #
+        # path = os.path.join(base_path, args.translate_fname + "_tgt_annotated_list_" + "all_full" + ".pkl")
+        #
+        # with open(output_tagger_file_path, "r", encoding="utf-8") as f:
+        #     rows = f.readlines()
+        #     ner_tag_list = list()
+        #     for row in rows:
+        #         ner_tags = list()
+        #         row = row.strip("\n").split(" ")
+        #         for r in row:
+        #             ner_tags.append(r.split("__")[1])
+        #         ner_tag_list.append(ner_tags)
 
-        output_tagger_file_path = os.path.join(config.TAGGER_FILE_PATH, "output_" +
-                                               args.translate_fname + ".txt")
-
-        path = os.path.join(base_path, args.translate_fname + "_tgt_annotated_list_" + "all_full" + ".pkl")
-
-        with open(output_tagger_file_path, "r", encoding="utf-8") as f:
-            rows = f.readlines()
-            ner_tag_list = list()
-            for row in rows:
-                ner_tags = list()
-                row = row.strip("\n").split(" ")
-                for r in row:
-                    ner_tags.append(r.split("__")[1])
-                ner_tag_list.append(ner_tags)
-
+        tagger = SequenceTagger.load('ner')
         for i, tgt_a in enumerate(tgt_annotated_list):
+            print("######################################################################")
+            print("Sentence: ", i)
+            sent = Sentence(tgt_sentence_list[i])
             print("Tokens: ", tgt_a.tokens)
-            tgt_a.ner_tags = ner_tag_list[i]
-            tgt_a.span_list = data_processing.get_entity_spans(tgt_a.ner_tags)
-            print("NER tags: ", tgt_a.ner_tags)
+            tagger.predict(sent)
+            entities = sent.to_dict(tag_type='ner')['entities']
+            print(entities)
+            # tgt_a.ner_tags = ner_tag_list[i]
+            # tgt_a.span_list = data_processing.get_entity_spans(tgt_a.ner_tags)
+            # print("NER tags: ", tgt_a.ner_tags)
 
-        with open(path, 'wb') as f:
-            pickle.dump(tgt_annotated_list, f)
+        # with open(path, 'wb') as f:
+        #     pickle.dump(tgt_annotated_list, f)
 
 
 if __name__ == '__main__':

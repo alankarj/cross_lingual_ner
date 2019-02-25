@@ -161,10 +161,16 @@ def main():
                     print("Done.")
 
                 print("Getting projected tags.")
+
+                if args.tgt_lang == "hi" or args.tgt_lang == "ta":
+                    use_misc = False
+                else:
+                    use_misc = True
                 predicted_tag_list = annotation_evaluation.get_fast_align_annotations(fast_align_output_path,
                                                                                       ner_tag_list,
                                                                                       tgt_token_list,
-                                                                                      annotated_list)
+                                                                                      annotated_list,
+                                                                                      use_misc)
 
                 predicted_tag_list = annotation_evaluation.process_annotations(predicted_tag_list)
 

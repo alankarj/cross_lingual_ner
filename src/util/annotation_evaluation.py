@@ -27,7 +27,7 @@ def get_gold_annotations(gold_file_path):
     return gold_list
 
 
-def get_fast_align_annotations(fast_align_path, ner_tag_list, tgt_token_list, annotated_list):
+def get_fast_align_annotations(fast_align_path, ner_tag_list, tgt_token_list, annotated_list, use_misc=True):
     predicted_tags = [[config.OUTSIDE_TAG for _ in tgt_token] for tgt_token in tgt_token_list]
     match_list = []
     with open(fast_align_path, 'r', encoding='utf-8') as f:
@@ -51,8 +51,10 @@ def get_fast_align_annotations(fast_align_path, ner_tag_list, tgt_token_list, an
 
                 tag = ner_tags[src_index]
                 tag_split = tag.split("-")
-                if len(tag_split) > 1 and tag_split[1] == "MISC":
-                    predicted_tags[i][tgt_index] = "O"
+
+                if len(tag_split) > 1:
+                    if not use_misc and tag_split[1] == "MISC":
+                        predicted_tags[i][tgt_index] = "O"
                 else:
                     predicted_tags[i][tgt_index] = tag
 
@@ -77,7 +79,7 @@ def get_fast_align_annotations(fast_align_path, ner_tag_list, tgt_token_list, an
             if entity_list != []:
                 span_beg, span_end, _ = identify_spans(entity_list)
                 for index, j in enumerate(range(span_beg, span_end)):
-                    if tag_type == "MISC":
+                    if not use_misc and tag_type == "MISC":
                         predicted_tags[i][j] = "O"
                     else:
                         if index == 0:
