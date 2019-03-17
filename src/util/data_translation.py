@@ -23,7 +23,7 @@ import re
 
 random.seed(config.SEED)
 
-MATCHING_SCORE_THRESHOLD = 0.75
+MATCHING_SCORE_THRESHOLD = 0.125
 MAX_SET_SIZE = 1000
 MOST_COMMON = 4
 DISTRIBUTION_OCCURRENCE_THRESHOLD = 2
@@ -33,7 +33,7 @@ SENT_ITER = -1
 PHRASE_ITER = -1
 
 DATE_TODAY = datetime.today().strftime("%d-%m-%Y")
-# DATE_TODAY = "28-11-2018"
+# DATE_TODAY = "27-02-2018"
 print("Today's date: ", DATE_TODAY)
 
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
@@ -73,6 +73,8 @@ class Translation:
             self.stop_word_list = config.stop_word_list_ta
         elif self.tgt_lang == "zh":
             self.stop_word_list = config.stop_word_list_zh
+        elif self.tgt_lang == "uz":
+            self.stop_word_list = config.stop_word_list_uz
         else:
             raise ValueError("Language %s stop word list not available." % self.tgt_lang)
 
@@ -204,8 +206,8 @@ class Translation:
                 with open(src_phrase_path, 'wb') as f:
                     pickle.dump(src_phrase_list, f)
 
-                    if self.args.verbosity == 2:
-                        print("Target phrase list: ", tgt_phrase_list[i])
+                if self.args.verbosity == 2:
+                    print("Target phrase list: ", tgt_phrase_list[i])
 
             if self.args.verbosity >= 1:
                 print("######################################################################")
@@ -382,7 +384,7 @@ class Translation:
 
         temp_suffix = ABLATION_STRING
         path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_list_" + str(MATCHING_SCORE_THRESHOLD) + temp_suffix + self.suffix + DATE_TODAY + ".pkl")
+                            "_annotated_list_" + str(MATCHING_SCORE_THRESHOLD) + temp_suffix + self.suffix + DATE_TODAY + "_32.pkl")
 
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
@@ -904,7 +906,7 @@ class Translation:
         return True
 
     def prepare_train_file(self):
-        if self.tgt_lang in ["es", "nl"]:
+        if self.tgt_lang in ["es", "nl", "uz"]:
             capitalize = True
         else:
             capitalize = False

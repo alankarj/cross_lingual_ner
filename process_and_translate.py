@@ -119,10 +119,11 @@ def main():
     translation = data_translation.Translation(annotated_list, args)
     translation.translate_data()
     if args.trans_sent == 0:
-        base_path = os.path.join(args.data_path, args.src_lang + "-" + args.tgt_lang)
-        src_file_path = os.path.join(base_path, "lexicon_ground-truth.txt")
-        tgt_file_path = os.path.join(base_path, "lexicon_ground-truth.pkl")
-        data_translation.read_lexicon(src_file_path, tgt_file_path)
+        for lexicon in config.LEXICON_FILE_NAMES:
+            base_path = os.path.join(args.data_path, args.src_lang + "-" + args.tgt_lang)
+            src_file_path = os.path.join(base_path, lexicon + ".txt")
+            tgt_file_path = os.path.join(base_path, lexicon + ".pkl")
+            data_translation.read_lexicon(src_file_path, tgt_file_path)
 
         translation.prepare_mega_tgt_phrase_list(calc_count_found=False)
         translation.get_tgt_annotations_new()

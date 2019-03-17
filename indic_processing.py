@@ -136,7 +136,7 @@ def process_files(folder_path):
 
 
 def read_stopwords(file_path):
-    with open(os.path.join(file_path, "tamil_stopwords"), "r", encoding="utf-8") as f:
+    with open(os.path.join(file_path, "hy_stopwords.txt"), "r", encoding="utf-8") as f:
         rows = f.readlines()
         stopword_list = [row.rstrip("\n") for row in rows]
     return stopword_list
@@ -144,9 +144,8 @@ def read_stopwords(file_path):
 
 if __name__ == "__main__":
     data_path = os.path.join(os.getcwd(), config.DATA_FOLDER)
-    file_path = os.path.join(data_path, LANG_CODE_MAP[TGT_LANG])
-    token_list, tag_list = process_files(os.path.join(data_path, TGT_LANG + "_train"))
-    prepare_all_files(token_list, tag_list, file_path)
-    # stopword_list = read_stopwords(file_path)
-    # print(stopword_list)
-    #
+    # file_path = os.path.join(data_path, LANG_CODE_MAP[TGT_LANG])
+    # token_list, tag_list = process_files(os.path.join(data_path, TGT_LANG + "_train"))
+    # prepare_all_files(token_list, tag_list, file_path)
+    stopword_list = read_stopwords(data_path)
+    print(stopword_list)

@@ -4,7 +4,7 @@ from epitran import backoff
 
 DATA_FOLDER = 'data'
 SRC_LANGS = ['en', 'hi', 'eno', 'ml', 'de', 'es', 'nl', 'ta', 'zh']
-TGT_LANGS = ['hi', 'es', 'de', 'nl', 'ta', 'zh', 'ar', 'en']
+TGT_LANGS = ['hi', 'es', 'de', 'nl', 'ta', 'zh', 'ar', 'en', 'uz']
 # TRANSLATE_FNAMES = ['train', 'dev', 'test']
 ALIGN_HEURISTICS = ['fast-align', 'affix-match']
 ALL_PARTIAL_SUFFIXES = ['partial', 'all']
@@ -18,7 +18,7 @@ INDEX_NER_TAGS = 3
 
 SEED = 0
 
-NER_TAGS = ['LOC', 'MISC', 'ORG', 'PER']
+NER_TAGS = ['LOC', 'MISC', 'ORG', 'PER', 'GPE']
 TAG_PREFIXES = ['B', 'I']
 OUTSIDE_TAG = 'O'
 
@@ -40,12 +40,13 @@ BATCH_SIZE = 128
 
 # LEXICON_FILE_NAMES = ["lexicon_ground-truth", "lexicon_idc"]
 LEXICON_FILE_NAMES = ["lexicon_ground-truth"]
+# LEXICON_FILE_NAMES = []
 MATCHING_ALGOS = ["token_match", "ipa_match"]
 
 TAGGER_FILE_PATH = "/Users/alankarjain/Documents/code/spring_2019/tagger"
 
 
-char_to_numeric = {'O': 0, 'LOC': 1, 'MISC': 2, 'ORG': 3, 'PER': 4}
+char_to_numeric = {'O': 0, 'LOC': 1, 'MISC': 2, 'ORG': 3, 'PER': 4, 'GPE': 5}
 
 gold_test_dict = dict()
 gold_test_dict["en"] = {
@@ -67,7 +68,8 @@ epi_dict = {"es": "spa-Latn",
             "hi": "hin-Deva",
             "zh": "cmn-Hans",
             "ar": "ara-Arab",
-            "en": "eng-Latn"
+            "en": "eng-Latn",
+            "uz": "uzb-Latn"
             }
 stop_word_list_hi = ["अंदर","अत","अदि","अप","अपना","अपनि","अपनी","अपने","अभि","अभी","आदि","आप","इंहिं","इंहें",
                      "इंहों","इतयादि","इत्यादि","इन","इनका","इन्हीं","इन्हें","इन्हों","इस","इसका","इसकि","इसकी","इसके",
@@ -172,6 +174,24 @@ stop_word_list_zh = ["、","。","〈","〉","《","》","一","一些","一何"
                      "％","＆","（","）","＊","＋","，","０","１","２","３","４","５","６",
                      "７","８","９","：","；","＜","＞","？","＠","［","］","｛","｜","｝",
                      "～","￥"]
+
+stop_word_list_uz = ["bo'ladi", 'ular', 'sakson', 'lekin', 'trillion', 'u', 'bizning',
+                     'narsa', 'yigirma', 'olti', 'ikki', 'siz', "to'qson", "to'rt",
+                     'u', 'ekan', 'qayerda', 'altmýþ', 'va', 'million', 'marta',
+                     "o'ttiz", 'besh', 'ellik', 'bizga', 'shuningdek', 'sakkiz', 'va',
+                     'juda', 'bu', 'yoki', 'yoki', 'qirq', 'ularning', 'uni', 'meni',
+                     'yetmish', 'milliard', "þ ko'rish", 'siz', "tug'ilishi", "to'qqiz",
+                     "ya'ni", 'bir qancha', 'narsalar', 'kim', 'nima uchun', 'sizning',
+                     'yetti', 'nima uchun', 'uch', 'narsalar', 'emasmi', 'hamma', 'ularga',
+                     'Bu erda', 'agar', 'dan þ', 'hamma', 'ishlar uchun', 'ming', 'men',
+                     'undan', 'kimdan', 'bir qancha', 'balki', 'nima', 'undan', 'kabi',
+                     'shuningdek', 'ulardan', 'siz', 'sizning', "ko'proq", 'nima uchun',
+                     'Þ', 'INSERM', 'bu bir', 'meni', 'bilan', 'ishlar', 'NARSALARI',
+                     'siz', 'vaqt', 'bizlar', 'uchun', 'daho', 'siz', 'qayerda', 'kimni',
+                     'biror narsa', 'bir marta', 'har bir', 'bir', "o'n", "bo'ladi", 'ekan',
+                     'Men hayron', 'siz', 'eng', 'hamma', 'a', 'bizga', 'agar', 'mening',
+                     'qayerda', 'u', 'meni', 'yuz', 'bir necha', 'chunki', 'qanday', 'hech',
+                     'kvadrillion']
 
 
 def get_allowed_tags():

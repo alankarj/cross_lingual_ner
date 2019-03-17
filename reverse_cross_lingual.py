@@ -8,6 +8,7 @@ import pickle
 import string
 from flair.data import Sentence
 from flair.models import SequenceTagger
+import nltk
 
 random.seed(config.SEED)
 
@@ -104,25 +105,26 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def get_ner_tags(tokens, flair_entities, table):
+def get_ner_tags(tokens, flair_entities):
     ner_tags = ["O" for _ in tokens]
-
+    entities_tagged = 0
     if flair_entities != []:
         search_index = 0
         entity_tokens, entity_type = get_entity(flair_entities, search_index)
         i = 0
         while i < len(tokens):
-            if tokens[i] == entity_tokens[0].translate(table):
+            if tokens[i] == entity_tokens[0]:
                 ner_tags[i] = "B-" + entity_type
-                for j in range(i+1, i + len(entity_tokens), 1):
-                    ner_tags[j] = "I-" + entity_type
+                entities_tagged += 1
+                for j in range(1, len(entity_tokens), 1):
+                    ner_tags[i+j] = "I-" + entity_type
                 search_index += 1
                 if search_index == len(flair_entities):
                     break
                 entity_tokens, entity_type = get_entity(flair_entities, search_index)
-                i += len(entity_tokens)
-            else:
-                i += 1
+            i += 1
+    assert len(ner_tags) == len(tokens)
+    assert entities_tagged == len(flair_entities)
     return ner_tags
 
 
@@ -221,9 +223,9 @@ def main():
         #         ner_tag_list.append(ner_tags)
 
         tagger = SequenceTagger.load('ner')
-        table = str.maketrans({key: None for key in string.punctuation})
+        # table = str.maketrans({key: None for key in string.punctuation})
         tgt_base_path = os.path.join(args.data_path, args.tgt_lang)
-        tgt_full_path = os.path.join(tgt_base_path, args.translate_fname + "-" + args.src_lang + ".pkl")
+        tgt_full_path = os.path.join(tgt_base_path, args.translate_fname + "-" + args.src_lang + "_processed.pkl")
 
         for i, tgt_a in enumerate(tgt_annotated_list):
             print("######################################################################")
@@ -234,7 +236,7 @@ def main():
             flair_entities = sent.to_dict(tag_type='ner')['entities']
             # print(flair_entities)
             # print(get_ner_tags(tgt_a.tokens, flair_entities, table))
-            tgt_a.ner_tags = get_ner_tags(tgt_a.tokens, flair_entities, table)
+            tgt_a.ner_tags = get_ner_tags(tgt_a.tokens, flair_entities)
             print("Entities: ", tgt_a.ner_tags)
             tgt_a.span_list = data_processing.get_entity_spans(tgt_a.ner_tags)
             print("NER tags: ", tgt_a.ner_tags)
@@ -244,4 +246,15 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # main()
+    tokens = ['We', 'have', 'Italians', ',', 'Japanese', ',', 'Koreans', ',', 'Moroccans', ',', 'Portuguese', ',', 'Yugoslavs', 'and', 'other', 'nationalities', 'in', 'our', 'club', 'and', 'there', 'are', 'no', 'difficulties', 'living', 'together.', '"']
+    flair_entities = [{'text': 'Italians', 'start_pos': 8, 'end_pos': 16, 'type': 'MISC', 'confidence': 0.9990298748016357},
+     {'text': 'Japanese', 'start_pos': 19, 'end_pos': 27, 'type': 'MISC', 'confidence': 0.999657392501831},
+     {'text': 'Koreans', 'start_pos': 30, 'end_pos': 37, 'type': 'MISC', 'confidence': 0.9982354640960693},
+     {'text': 'Moroccans', 'start_pos': 40, 'end_pos': 49, 'type': 'MISC', 'confidence': 0.999698281288147},
+     {'text': 'Portuguese', 'start_pos': 52, 'end_pos': 62, 'type': 'MISC', 'confidence': 0.9999006986618042},
+     {'text': 'Yugoslavs', 'start_pos': 65, 'end_pos': 74, 'type': 'MISC', 'confidence': 0.9999207258224487}]
+    table = str.maketrans({key: None for key in string.punctuation})
+    ner_tags = get_ner_tags(tokens, flair_entities, table)
+    print(tokens)
+    print(ner_tags)
