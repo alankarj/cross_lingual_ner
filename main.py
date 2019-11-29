@@ -133,13 +133,13 @@ def main():
         annotated_list = annotated_data.process_data()
         with open(annotated_list_file_path, 'wb') as f:
             pickle.dump(annotated_list, f)
-        # write_file_path = os.path.join(args.src_file_path, file_name + ".tsv")
-        # data_processing.write_to_file([annotated_list], write_file_path)
     else:
+        # Load the pre-processed annotated list.
         annotated_list = pickle.load(open(annotated_list_file_path, 'rb'))
 
-    with open(os.path.join(args.data_path, args.api_key_fname), 'r', encoding='utf-8') as f:
-        args.api_key = f.read().strip('\n')
+    with open(os.path.join(args.data_path, args.api_key_fname), "r",
+              encoding="utf-8") as f:
+        args.api_key = f.read().strip("\n")
 
     translation = data_translation.Translation(annotated_list, args)
     translation.translate_data()

@@ -163,25 +163,6 @@ def _add_span(span_list, beg, end, tag_type):
     return span_list
 
 
-def write_to_file(sentence_ids, list_annotated_list, file_path):
-    prev_length = None
-    # All annotated_lists must be of the same length (same number of sentences)
-    for annotated_list in list_annotated_list:
-        if prev_length is not None:
-            assert len(annotated_list) == prev_length
-        prev_length = len(annotated_list)
-
-    with open(file_path, "w", encoding="utf-8") as f:
-        csv_writer = csv.writer(f, delimiter="\t")
-        for i in range(prev_length):
-            for annotated_list in list_annotated_list:
-                annotation = annotated_list[i]
-                write_str = [str(sentence_ids[i])]
-                for j, token in enumerate(annotation.tokens):
-                    write_str.append(str(token) + " {" + str(annotation.ner_tags[j]) + "}")
-                csv_writer.writerow(write_str)
-
-
 def prepare_train_file(annotated_list, drop_list, file_path, remove_misc=False):
     if drop_list == None:
         drop_list = []
