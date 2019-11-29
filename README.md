@@ -1,8 +1,8 @@
 # Entity Projection via MT for Cross-Lingual NER
-Code for [this](https://arxiv.org/pdf/1909.05356.pdf) paper. We demonstrate 
-that using off-the-shelf Machine Translation (MT) systems and a few simple 
-heuristics, significant gains can be made towards cross-lingual NER for 
-<em>medium-resource languages</em><sup>1</sup>.
+Repository containing the code for [this](https://arxiv.org/pdf/1909.05356.pdf) 
+paper. We demonstrate that using off-the-shelf Machine Translation (MT) systems 
+and a few simple heuristics, significant gains can be made towards cross-lingual 
+NER for <em>medium-resource languages</em><sup>1</sup>.
 
 # Set-up
 
