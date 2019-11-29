@@ -70,5 +70,6 @@ entity phrases get sent to the API for translation. When one or both of these
 have positive integral values, the batches or sentences numbered lower than 
 these indices (`sent_iter`, `phrase_iter`) are not sent again for translation.
 
+# Footnotes
 <sup>1</sup> We define medium-resource languages to be those for which while 
 strong off-the-shelf MT systems exist, large annotated corpora for NER do not.
