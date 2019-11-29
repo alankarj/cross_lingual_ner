@@ -1,5 +1,11 @@
-# cross_lingual_ner
-Cross-lingual Named Entity Recognition
+# Entity Projection via Machine Translation for Cross-Lingual NER
+Code for (this)[https://arxiv.org/pdf/1909.05356.pdf] paper. We demonstrate 
+that using off-the-shelf Machine Translation (MT) systems and a few simple 
+heuristics, significant gains can be made towards cross-lingual NER for 
+<em>medium-resource languages</em>[^1].
+
+[^1]: We define medium-resource languages to be those for which while strong 
+off-the-shelf MT systems exist, large annotated corpora for NER do not.
 
 # Set-up
 
