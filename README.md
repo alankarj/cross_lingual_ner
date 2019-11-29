@@ -1,17 +1,19 @@
 # Entity Projection via MT for Cross-Lingual NER
-Repository containing the code for [this](https://arxiv.org/pdf/1909.05356.pdf) 
-paper. We demonstrate that using off-the-shelf Machine Translation (MT) systems 
+Repository containing the implementation of the Translate-Match-Project (TMP)
+ method described in [this](https://arxiv.org/pdf/1909.05356.pdf) paper. We 
+ demonstrate that using off-the-shelf Machine Translation (MT) systems 
 and a few simple heuristics, significant gains can be made towards cross-lingual 
 NER for <em>medium-resource languages</em><sup>1</sup>.
 
 # Set-up
 
-## Environment
+## Basics
 This code has been written in Python 3.6. Please create a dedicated 
 environment (using virtualenv or conda) and install the packages listed in 
-the requirements file in your environment using the following command. Note 
-that all the commands listed in this README assume that you are in the parent
- project directory, i.e., in `cross_lingual_ner/`.
+the requirements file in your environment using the following command. Also,
+create a `data/` directory where all the input and output files can be 
+stored. Note that all the commands and paths listed in this README assume 
+that you are in the parent project directory, i.e., in `cross_lingual_ner/`.
 
 ```
 pip install -r requirements.txt
@@ -69,6 +71,21 @@ Initially, both these indices are set to -1, so that all sentences or
 entity phrases get sent to the API for translation. When one or both of these 
 have positive integral values, the batches or sentences numbered lower than 
 these indices (`sent_iter`, `phrase_iter`) are not sent again for translation.
+
+# Getting annotated target data
+
+## Preprocess the source files
+
+## TRANSLATE from source to target
+
+## MATCH and PROJECT
+
+# Training a model in the target language
+We used the code from...
+
+# Contact
+Please send an email to alankarjain91@gmail.com in case of any questions or 
+suggestions related to the paper or the code.
 
 # Footnotes
 <sup>1</sup> We define medium-resource languages to be those for which while 
