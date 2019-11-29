@@ -1,11 +1,8 @@
-# Entity Projection via Machine Translation for Cross-Lingual NER
-Code for (this)[https://arxiv.org/pdf/1909.05356.pdf] paper. We demonstrate 
+# Entity Projection via MT for Cross-Lingual NER
+Code for [this](https://arxiv.org/pdf/1909.05356.pdf) paper. We demonstrate 
 that using off-the-shelf Machine Translation (MT) systems and a few simple 
 heuristics, significant gains can be made towards cross-lingual NER for 
-<em>medium-resource languages</em>[^1].
-
-[^1]: We define medium-resource languages to be those for which while strong 
-off-the-shelf MT systems exist, large annotated corpora for NER do not.
+<em>medium-resource languages</em><sup>1</sup>.
 
 # Set-up
 
@@ -72,3 +69,6 @@ Initially, both these indices are set to -1, so that all sentences or
 entity phrases get sent to the API for translation. When one or both of these 
 have positive integral values, the batches or sentences numbered lower than 
 these indices (`sent_iter`, `phrase_iter`) are not sent again for translation.
+
+<sup>1</sup> We define medium-resource languages to be those for which while 
+strong off-the-shelf MT systems exist, large annotated corpora for NER do not.
