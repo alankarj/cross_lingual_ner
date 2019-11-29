@@ -47,7 +47,7 @@ def get_google_translations(src_list, src_lang_code, tgt_lang_code, api_key):
     return [t['translatedText'] for t in tgt_dict['translations']]
 ```
 
-####Note
+#### Note
 The Google Cloud Translation service can at times error out due to
  request arrival rate exceeding the maximum rate allowed. The argument 
 `batch_size` (in `main.py`) has been set to 128 and `time_sleep` to 10 (seconds)
