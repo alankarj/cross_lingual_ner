@@ -2,7 +2,7 @@ import os
 import random
 
 from argparse import ArgumentParser
-from src.util import data_processing, data_translation, annotation_evaluation
+from src.util import data_processing, tmp, annotation_evaluation
 from src import config
 import pickle
 
@@ -68,9 +68,9 @@ def parse_arguments():
     parser.add_argument("--pre_process", dest="pre_process", type=int,
                         default=0,
                         help="Whether to pre-process raw data or not")
-    # Set this flag to 1 if the TRANSLATE step, i.e., translation of the
+    # Set this flag to 2 if the TRANSLATE step, i.e., translation of the
     # annotated source corpus to the target language, sentence-by-sentence needs
-    # to be performed. Set it to 2 if only the first step of MATCH,
+    # to be performed. Set it to 1 if only the first step of MATCH,
     # i.e., translation of entity phrases needs to be performed.
     parser.add_argument("--trans_sent", dest="trans_sent", type=int, default=0,
                         help="Whether to translate full sentences or not")
@@ -89,6 +89,20 @@ def parse_arguments():
     parser.add_argument('--num_sample', dest='num_sample', type=int,
                         default=100, help="Number of sentences to sample for "
                                           "partial translation.")
+
+    parser.add_argument('--sent_iter', dest='sent_iter', type=int,
+                        default=-1, help="Iteration index of the batch "
+                                         "of source sentences during which a "
+                                         "translation error occurred while "
+                                         "translating sentences.")
+
+    parser.add_argument('--phrase_iter', dest='sent_iter', type=int,
+                        default=-1, help="Iteration index of the source "
+                                         "sentence during which a translation "
+                                         "error occurred while translating "
+                                         "only entitites.")
+
+
     return parser.parse_args()
 
 
@@ -120,7 +134,7 @@ def main():
 
     file_name = args.translate_fname + "_processed"
     annotated_list_file_path = os.path.join(args.src_file_path,
-                                            file_name + ".pkl")
+                                            file_name + config.PKL_EXT)
 
     # Pre-process the raw input only if the flag is set to 1.
     if args.pre_process == 1:
@@ -141,14 +155,14 @@ def main():
               encoding="utf-8") as f:
         args.api_key = f.read().strip("\n")
 
-    translation = data_translation.Translation(annotated_list, args)
+    translation = tmp.TMP(annotated_list, args)
     translation.translate_data()
     if args.trans_sent == 0:
         for lexicon in config.LEXICON_FILE_NAMES:
             base_path = os.path.join(args.data_path, args.src_lang + "-" + args.tgt_lang)
             src_file_path = os.path.join(base_path, lexicon + ".txt")
-            tgt_file_path = os.path.join(base_path, lexicon + ".pkl")
-            data_translation.read_lexicon(src_file_path, tgt_file_path)
+            tgt_file_path = os.path.join(base_path, lexicon + config.PKL_EXT)
+            tmp.read_lexicon(src_file_path, tgt_file_path)
 
         translation.prepare_mega_tgt_phrase_list(calc_count_found=False)
         translation.get_tgt_annotations_new()

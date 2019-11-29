@@ -16,6 +16,9 @@ INDEX_POS_TAGS = 1
 INDEX_CHUNKS = 2
 INDEX_NER_TAGS = 3
 
+# Time to wait between successive requests to the Google Cloud Translate API.
+TIME_SLEEP = 10
+
 SEED = 0
 
 NER_TAGS = ['LOC', 'MISC', 'ORG', 'PER', 'GPE']

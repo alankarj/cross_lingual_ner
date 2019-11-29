@@ -29,12 +29,7 @@ MOST_COMMON = 4
 DISTRIBUTION_OCCURRENCE_THRESHOLD = 2
 ABLATION_STRING = "original"
 
-SENT_ITER = -1
-PHRASE_ITER = -1
-
 DATE_TODAY = datetime.today().strftime("%d-%m-%Y")
-# DATE_TODAY = "27-02-2018"
-print("Today's date: ", DATE_TODAY)
 
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 logging.getLogger('googleapiclient.discovery').setLevel(logging.ERROR)
@@ -44,17 +39,25 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
 
 
-class Translation:
+class TMP:
+    """
+    This class implements the complete TMP algorithm.
+    """
     def __init__(self, annotated_list, args):
+        # List of annotated sentences from source language.
         self.src_annotated_list = annotated_list
         self.args = args
-        self.base_path = os.path.join(args.data_path, args.src_lang + "-" + args.tgt_lang)
+        # Path of the directory where all the intermediate files would be
+        # stored.
+        self.base_path = os.path.join(args.data_path, args.src_lang + "-" +
+                                      args.tgt_lang)
         self.sentence_ids = None
         self.tgt_sentence_list = None
         self.tgt_phrase_list = None
         self.src_phrase_list = None
         self.tgt_annotated_list = list()
         self.tgt_phrase_instance_list = list()
+        # Suffix for intermediate files.
         self.suffix = None
         self.drop_list = None
         self.tgt_lang = args.tgt_lang
@@ -86,6 +89,15 @@ class Translation:
         logger.addHandler(handler)
 
     def translate_data(self):
+        """
+        :return: Populate the self.tgt_sentence_list, self.tgt_phrase_list
+        and self.src_phrase_list with their correct values. For accomplishing
+        that, this function utilizes the self.args.trans_sent flag to
+        determine whether both sentences and entity phrases need to be
+        translated (trans_sent = 2), only entity phrases need to be
+        translated (trans_sent = 1) or both of them have already been
+        translated and only need to be loaded from files (trans_sent = 0).
+        """
         num_sentences = len(self.src_annotated_list)
 
         if self.args.translate_all == 0:
@@ -93,43 +105,67 @@ class Translation:
         else:
             self.suffix = "all"
 
+        # If not all sentences need to be translated, read from a file
+        # containing num_sample sentence Ids or sample num_sample sentences.
         if self.args.translate_all == 0:
             if self.args.num_sample > num_sentences:
-                raise ValueError("Cannot sample more than the number of sentences.")
-            sentence_ids_file_name = self.args.sentence_ids_file + "_" + self.suffix + ".pkl"
-            sentence_ids_path = os.path.join(self.base_path, sentence_ids_file_name)
+                raise ValueError("Cannot sample more than the number of "
+                                 "sentences.")
+            sentence_ids_file_name = self.args.sentence_ids_file + \
+                                     "_num_sample=" + self.suffix + ".pkl"
+            sentence_ids_path = os.path.join(self.base_path,
+                                             sentence_ids_file_name)
             if os.path.exists(sentence_ids_path):
-                sentence_ids = pickle.load(open(sentence_ids_path, 'rb'))
+                sentence_ids = pickle.load(open(sentence_ids_path, "rb"))
             else:
-                sentence_ids = random.sample(list(range(num_sentences)), self.args.num_sample)
+                sentence_ids = random.sample(list(range(num_sentences)),
+                                             self.args.num_sample)
                 with open(sentence_ids_path, 'wb') as f:
                     pickle.dump(sentence_ids, f)
         else:
+            # All sentences would be translated.
             sentence_ids = list(range(num_sentences))
 
-        src_sentence_list = [' '.join(self.src_annotated_list[sid].tokens) for sid in sentence_ids]
+        # Re-construct sentences from tokens in a naïve fashion by concatenating
+        # tokens together using whitespace. In absence of more information from
+        # the input, this is a cheap and reasonably accurate way of constructing
+        # sentences to send them for translation.
+        src_sentence_list = [" ".join(self.src_annotated_list[sid].tokens)
+                             for sid in sentence_ids]
 
         if self.args.verbosity == 2:
-            print("Source sentence list loaded. Length: %d" % len(src_sentence_list))
+            print("Source sentence list loaded. Length: %d" % 
+                  len(src_sentence_list))
 
-        # File names to either read from (if trans_sent is 0) or write to (if trans_sent is 1)
-        tgt_sentence_path = os.path.join(self.base_path, self.args.translate_fname +
-                                         '_' + self.suffix + config.PKL_EXT)
-        tgt_phrase_path = os.path.join(self.base_path, self.args.translate_fname +
-                                       '_tgt_phrases_' + self.suffix + config.PKL_EXT)
-        src_phrase_path = os.path.join(self.base_path, self.args.translate_fname +
-                                       '_src_phrases_' + self.suffix + config.PKL_EXT)
+        # File names to either read from (if args.trans_sent is 0) or write to 
+        # (if args.trans_sent is 1).
+        tgt_sentence_path = os.path.join(self.base_path,
+                                         self.args.translate_fname +
+                                         "_" + self.suffix + config.PKL_EXT)
+        tgt_phrase_path = os.path.join(self.base_path,
+                                       self.args.translate_fname +
+                                       "_tgt_phrases_" + self.suffix
+                                       + config.PKL_EXT)
+        src_phrase_path = os.path.join(self.base_path,
+                                       self.args.translate_fname +
+                                       "_src_phrases_" + self.suffix +
+                                       config.PKL_EXT)
 
+        src_lang_code = _google_translate_lang_code(self.args.src_lang)
+        tgt_lang_code = _google_translate_lang_code(self.args.tgt_lang)
+
+        # Perform TRANSLATE step, i.e., translate of the annotated source
+        # corpus to the target language.
         if self.args.trans_sent == 2:
-            # Get sentence list in target language
+            # Sentences need to be sent in batches to Google Translate service.
             batch_size = config.BATCH_SIZE
+            # If the file exists, load the list, else create an empty list.
             tgt_sentence_list = _get_saved_list(tgt_sentence_path)
-            print(len(tgt_sentence_list))
 
             max_iter = int(math.ceil(num_sentences/batch_size))
             for i in range(max_iter):
-
-                if i < SENT_ITER:
+                # Ignore all batches that have already been translated.
+                if i < self.args.sent_iter:
                     continue
 
                 beg = i * batch_size
@@ -137,34 +173,35 @@ class Translation:
 
                 if self.args.verbosity == 2:
                     print("Batch ID: %d" % i)
-                    print("From %d to %d..." % (beg, end))
-
-                if self.args.tgt_lang == "zh":
-                    tgt_lang = "zh-CN"
-                else:
-                    tgt_lang = self.args.tgt_lang
+                    print("Sentence indices from %d to %d being sent for "
+                          "translation..." % (beg, end))
 
                 src_sentences = src_sentence_list[beg:end]
-                tgt_sentence_list.extend(get_google_translations(src_sentences,
-                                                                 self.args.src_lang,
-                                                                 tgt_lang,
-                                                                 self.args.api_key))
-                with open(tgt_sentence_path, 'wb') as f:
+                tgt_sentence_list.extend(get_google_translations(
+                    src_sentences, src_lang_code,
+                    tgt_lang_code, self.args.api_key))
+
+                # Store the target sentence list obtained so far.
+                with open(tgt_sentence_path, "wb") as f:
                     pickle.dump(tgt_sentence_list, f)
-                time.sleep(10)
+                time.sleep(config.TIME_SLEEP)
 
+        # Translate entity phrases only in this round.
         if self.args.trans_sent >= 1:
-            tgt_sentence_list = pickle.load(open(tgt_sentence_path, 'rb'))
+            tgt_sentence_list = pickle.load(open(tgt_sentence_path, "rb"))
 
-            if PHRASE_ITER < 0:
+            # If no sentence has been "processed", i.e., entity phrases
+            # belonging to a sentence have not yet been translated, initialize
+            # the phrase lists by an empty list.
+            if self.args.phrase_iter < 0:
                 src_phrase_list = list()
-                print("Length of source phrase list: ", len(src_phrase_list))
                 tgt_phrase_list = list()
-                print("Length of target phrase list: ", len(tgt_phrase_list))
-
+            # Else, simply load the phrase lists.
             else:
                 src_phrase_list = pickle.load(open(src_phrase_path, 'rb'))
                 tgt_phrase_list = pickle.load(open(tgt_phrase_path, 'rb'))
+
+            if self.args.verbosity >= 1:
                 print("Length of source phrase list: ", len(src_phrase_list))
                 print("Length of target phrase list: ", len(tgt_phrase_list))
 
@@ -173,51 +210,61 @@ class Translation:
                     continue
 
                 if self.args.verbosity >= 1:
-                    print("######################################################################")
+                    print("####################################################"
+                          "##################")
                     print("Sentence-%d" % i)
 
                 a = self.src_annotated_list[sid]
                 span_list = a.span_list
 
-                # tgt_tokens = get_clean_tokens(tgt_sentence_list[i], self.use_corenlp)
                 if self.args.verbosity == 2:
                     print("Source tokens: ", a.tokens)
-                    # print("Tgt tokens: ", tgt_tokens)
 
                 src_phrase_list.append(list())
+                # Construct a list of entity phrases for the sentence Id
+                # indicated by sid.
                 for span in span_list:
-                    phrase = ' '.join(a.tokens[span.beg:span.end])
+                    phrase = " ".join(a.tokens[span.beg:span.end])
                     src_phrase_list[i].append(phrase)
                     if self.args.verbosity == 2:
-                        print("Beginning: %d, End: %d, Tag: %s" % (span.beg, span.end,
-                                                                   span.tag_type), end='')
-                        print(", Phrase: ", phrase)
+                        print("Beginning: %d, End: %d, Tag: %s" %
+                              (span.beg, span.end, span.tag_type), end='')
+                        print("; Phrase: ", phrase)
 
+                # The complete list of all entity phrases in sentence sid.
                 if self.args.verbosity == 2:
                     print("Source phrase list: ", src_phrase_list[i])
 
-                if src_phrase_list[i] != list():
-                    tgt_phrase_list.append(get_google_translations(src_phrase_list[i], self.args.src_lang, self.args.tgt_lang, self.args.api_key))
+                # Send the phrase list for translation if it is not empty.
+                if src_phrase_list[i]:
+                    tgt_phrase_list.append(get_google_translations(
+                        src_phrase_list[i], src_lang_code,
+                        tgt_lang_code, self.args.api_key))
                 else:
                     tgt_phrase_list.append(list())
 
-                with open(tgt_phrase_path, 'wb') as f:
-                    pickle.dump(tgt_phrase_list, f)
+                # Store the source and target phrase lists obtained so far.
                 with open(src_phrase_path, 'wb') as f:
                     pickle.dump(src_phrase_list, f)
+                with open(tgt_phrase_path, 'wb') as f:
+                    pickle.dump(tgt_phrase_list, f)
 
                 if self.args.verbosity == 2:
                     print("Target phrase list: ", tgt_phrase_list[i])
 
             if self.args.verbosity >= 1:
-                print("######################################################################")
+                print("########################################################"
+                      "##############")
                 print("Source entities (phrases) translated.")
 
+            # Store the final source and target entity phrase lists.
             with open(tgt_phrase_path, 'wb') as f:
                 pickle.dump(tgt_phrase_list, f)
             with open(src_phrase_path, 'wb') as f:
                 pickle.dump(src_phrase_list, f)
 
+        # If trans_sent == 0, then simply load the target sentence list,
+        # source phrase list and the target phrase list.
         else:
             tgt_sentence_list = pickle.load(open(tgt_sentence_path, 'rb'))
             tgt_phrase_list = pickle.load(open(tgt_phrase_path, 'rb'))
@@ -229,20 +276,19 @@ class Translation:
         self.src_phrase_list = src_phrase_list
 
         for i, src_phrase in enumerate(self.src_phrase_list):
-            print(self.src_phrase_list[i])
-            print(self.tgt_phrase_list[i])
+            # The number of entity phrases should be the same in any given
+            # source-target sentence pair.
             assert len(self.src_phrase_list[i]) == len(self.tgt_phrase_list[i])
 
-        # for i, src_a in enumerate(self.src_annotated_list):
-        #     if src_a.tokens[0] == "Abu":
-        #         print(i)
-        #         print(src_a.tokens)
-
         if self.args.verbosity >= 1:
-            print("######################################################################")
-            print("Target sentence list loaded. Length: %d" % len(tgt_sentence_list))
-            print("Source entity (phrase) list loaded. Length: %d" % len(src_phrase_list))
-            print("Target entity (phrase) list loaded. Length: %d" % len(tgt_phrase_list))
+            print("############################################################"
+                  "##########")
+            print("Target sentence list loaded. Length: %d" %
+                  len(tgt_sentence_list))
+            print("Source entity (phrase) list loaded. Length: %d" %
+                  len(src_phrase_list))
+            print("Target entity (phrase) list loaded. Length: %d" %
+                  len(tgt_phrase_list))
 
     def prepare_mega_tgt_phrase_list(self, calc_count_found=False):
         lexicons = list()
@@ -941,11 +987,11 @@ class Match:
         self.match_list.append((ref_id, score))
 
 
-def get_google_translations(src_sentence_list, src_lang, tgt_lang, api_key):
+def get_google_translations(src_list, src_lang_code, tgt_lang_code, api_key):
     service = build('translate', 'v2', developerKey=api_key)
-    tgt_dict = service.translations().list(source=src_lang, target=tgt_lang, q=src_sentence_list).execute()
-    tgt_sentence_list = [t['translatedText'] for t in tgt_dict['translations']]
-    return tgt_sentence_list
+    tgt_dict = service.translations().list(
+        source=src_lang_code, target=tgt_lang_code, q=src_list).execute()
+    return [t['translatedText'] for t in tgt_dict['translations']]
 
 def tokenize_using_corenlp(text):
     corenlp_parser = CoreNLPParser('http://localhost:9001', encoding='utf8')
@@ -1151,3 +1197,10 @@ def get_ordered_spans(tag_id, tag_score_list):
     span_list = sorted(span_list, key=lambda x: x[2], reverse=True)
     return span_list
 
+
+# Get Google Translate Language Code
+def _google_translate_lang_code(lang):
+    if lang == "zh":
+        return "zh-CN"
+    else:
+        return lang

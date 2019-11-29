@@ -2,7 +2,7 @@ import os
 import random
 
 from argparse import ArgumentParser
-from src.util import data_processing, data_translation, annotation_evaluation
+from src.util import data_processing, tmp, annotation_evaluation
 from src import config
 import pickle
 import string
@@ -172,7 +172,7 @@ def main():
         args.api_key = f.read().strip('\n')
 
     if args.trans_sent > 0:
-        translation = data_translation.Translation(annotated_list, args)
+        translation = tmp.Translation(annotated_list, args)
         translation.translate_data()
 
     else:
@@ -195,7 +195,7 @@ def main():
                 sentence = sentence.replace("&#39;", "\'")
                 sentence = sentence.replace(" &amp; ", "&")
                 tgt_annotation = data_processing.Annotation()
-                tgt_annotation.tokens = data_translation.get_clean_tokens(sentence, False)
+                tgt_annotation.tokens = tmp.get_clean_tokens(sentence, False)
                 print("Tokens: ", tgt_annotation.tokens)
                 tgt_annotated_list.append(tgt_annotation)
             with open(path, "wb") as f:

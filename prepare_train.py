@@ -1,7 +1,7 @@
 import os
 import random
 from argparse import ArgumentParser
-from src.util import data_processing, data_translation, annotation_evaluation
+from src.util import data_processing, tmp, annotation_evaluation
 from src import config
 import pickle
 from nltk.corpus import stopwords
@@ -106,7 +106,7 @@ def main():
     else:
         use_corenlp = False
 
-    tgt_token_list = [data_translation.get_clean_tokens(tgt_sentence, use_corenlp) for tgt_sentence in tgt_sentence_list]
+    tgt_token_list = [tmp.get_clean_tokens(tgt_sentence, use_corenlp) for tgt_sentence in tgt_sentence_list]
 
     if args.tgt_lang == "hi":
         for i, token_list in enumerate(tgt_token_list):
@@ -151,8 +151,8 @@ def main():
                 if args.run_fast_align == 1:
                     fast_align_input_path = os.path.join(base_path, args.translate_fname + '_' +
                                                          args.align_heuristic)
-                    data_translation.generate_fast_align_data(src_sentence_list, tgt_sentence_list,
-                                                              fast_align_input_path)
+                    tmp.generate_fast_align_data(src_sentence_list, tgt_sentence_list,
+                                                 fast_align_input_path)
                     print("Input data for %s generated." % args.align_heuristic)
                     print("Now running %s code." % args.align_heuristic)
                     os.system("cd " + config.FAST_ALIGN_PATH + "; " + "./fast_align -d -o -v -I 5" +
