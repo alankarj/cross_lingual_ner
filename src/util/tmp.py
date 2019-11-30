@@ -23,68 +23,74 @@ import re
 
 random.seed(config.SEED)
 
-MATCHING_SCORE_THRESHOLD = 0.125
-MAX_SET_SIZE = 1000
-MOST_COMMON = 4
-DISTRIBUTION_OCCURRENCE_THRESHOLD = 2
-ABLATION_STRING = "original"
-
-DATE_TODAY = datetime.today().strftime("%d-%m-%Y")
-
-logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
-logging.getLogger('googleapiclient.discovery').setLevel(logging.ERROR)
-logging.getLogger('cloudpickle').setLevel(logging.ERROR)
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger()
-
 
 class TMP:
     """
     This class implements the complete TMP algorithm.
     """
     def __init__(self, annotated_list, args):
+        self.args = args
         # List of annotated sentences from source language.
         self.src_annotated_list = annotated_list
-        self.args = args
-        # Path of the directory where all the intermediate files would be
-        # stored.
+        # Path where all the intermediate files would be stored.
         self.base_path = os.path.join(args.data_path, args.src_lang + "-" +
                                       args.tgt_lang)
+        # List containing Ids of sentences sampled (if the entire corpus does
+        # not need to be translated and processed).
         self.sentence_ids = None
+        # List of sentences in the target language (obtained through the 
+        # TRANSLATE step).
         self.tgt_sentence_list = None
+        # List of entity phrases for each sentence in the target language.
         self.tgt_phrase_list = None
+        # List of entity phrases for each sentence in the source language.
         self.src_phrase_list = None
+        # List of annotated sentences in the in the target language.
         self.tgt_annotated_list = list()
-        self.tgt_phrase_instance_list = list()
+        # List of candidate phrases in the target language for each source
+        # entity phrase.
+        self.tgt_phrase_candidate_list = list()
         # Suffix for intermediate files.
         self.suffix = None
+        # A list of sentence Ids that need to be dropped from the final
+        # training / valid / test file.
         self.drop_list = None
+        self.src_lang = args.src_lang
         self.tgt_lang = args.tgt_lang
+        # Get Epitran object for Transliteration.
         self.epi = config.get_epi(self.tgt_lang)
-        # self.src_epi = epitran.Epitran("eng-Latn")
+
+        # Whether or not to use Stanford CoreNLP for tokenization.
         if self.tgt_lang == "zh" or self.tgt_lang == "ar":
             self.use_corenlp = True
         else:
             self.use_corenlp = False
 
-        if self.tgt_lang in config.stop_word_dict:
-            self.stop_word_list = set(stopwords.words(config.stop_word_dict[self.tgt_lang]))
-        elif self.tgt_lang == "hi":
-            self.stop_word_list = config.stop_word_list_hi
-        elif self.tgt_lang == "ta":
-            self.stop_word_list = config.stop_word_list_ta
-        elif self.tgt_lang == "zh":
-            self.stop_word_list = config.stop_word_list_zh
-        elif self.tgt_lang == "uz":
-            self.stop_word_list = config.stop_word_list_uz
+        # Stop words for the target language.
+        if self.tgt_lang in config.STOP_WORD_LANG_MAP:
+            self.stop_word_list = set(stopwords.words(
+                config.STOP_WORD_LANG_MAP[self.tgt_lang]))
+        elif self.tgt_lang in config.STOP_WORD_DICT:
+            self.stop_word_list = config.STOP_WORD_DICT[self.tgt_lang]
         else:
-            raise ValueError("Language %s stop word list not available." % self.tgt_lang)
+            raise ValueError("Language %s stop word list not available."
+                             % self.tgt_lang)
 
-        handler = logging.FileHandler("translation_" + "en-" + self.tgt_lang + "_"
-                                      + datetime.today().strftime("%d-%m-%Y") + "_" +
-                                      str(MATCHING_SCORE_THRESHOLD) + "_" + str(MOST_COMMON) +
-                                      ABLATION_STRING + ".log")
+        self.date_today = datetime.today().strftime("%d-%m-%Y")
+
+        logging.getLogger("googleapiclient.discovery_cache").setLevel(
+            logging.ERROR)
+        logging.getLogger("googleapiclient.discovery").setLevel(logging.ERROR)
+        logging.getLogger("cloudpickle").setLevel(logging.ERROR)
+
+        logging.basicConfig(level=logging.DEBUG)
+        logger = logging.getLogger()
+        
+        handler = logging.FileHandler(
+            "translation_" + self.src_lang + "-" + self.tgt_lang + "_" +
+            datetime.today().strftime("%d-%m-%Y") + "_" +
+            str(self.args.matching_score_threshold) + "_" +
+            str(self.args.topk) + self.args.ablation_string + ".log")
         handler.setLevel(logging.DEBUG)
         logger.addHandler(handler)
 
@@ -151,8 +157,8 @@ class TMP:
                                        "_src_phrases_" + self.suffix +
                                        config.PKL_EXT)
 
-        src_lang_code = _google_translate_lang_code(self.args.src_lang)
-        tgt_lang_code = _google_translate_lang_code(self.args.tgt_lang)
+        src_lang_code = _google_translate_lang_code(self.src_lang)
+        tgt_lang_code = _google_translate_lang_code(self.tgt_lang)
 
         # Perform TRANSLATE step, i.e., translate of the annotated source
         # corpus to the target language.
@@ -292,12 +298,12 @@ class TMP:
 
     def prepare_mega_tgt_phrase_list(self, calc_count_found=False):
         lexicons = list()
-        tgt_phrase_instance_list = list()
+        tgt_phrase_candidate_list = list()
 
-        tgt_phrase_instance_list_path = os.path.join(self.base_path, self.args.translate_fname
-        + "_tgt_phrase_instance_list.pkl")
-        if os.path.exists(tgt_phrase_instance_list_path):
-            self.tgt_phrase_instance_list = pickle.load(open(tgt_phrase_instance_list_path, 'rb'))
+        tgt_phrase_candidate_list_path = os.path.join(self.base_path, self.args.translate_fname
+        + "_tgt_phrase_candidate_list.pkl")
+        if os.path.exists(tgt_phrase_candidate_list_path):
+            self.tgt_phrase_candidate_list = pickle.load(open(tgt_phrase_candidate_list_path, 'rb'))
 
         else:
             for lexicon_file_name in config.LEXICON_FILE_NAMES:
@@ -305,12 +311,12 @@ class TMP:
                 lexicons.append(lexicon)
 
             for i, src_phrase_sent in enumerate(self.src_phrase_list):
-                tgt_phrase_instance_list.append(list())
+                tgt_phrase_candidate_list.append(list())
                 for j, src_phrase in enumerate(src_phrase_sent):
                     tgt_phrase_instance = TgtPhrases(src_phrase)
                     tgt_phrase_instance.add_tgt_phrase([self.tgt_phrase_list[i][j].replace("&#39;", "\'")])
                     tgt_phrase_instance.add_tgt_phrase([src_phrase])
-                    tgt_phrase_instance_list[i].append(tgt_phrase_instance)
+                    tgt_phrase_candidate_list[i].append(tgt_phrase_instance)
 
                 for k, lexicon in enumerate(lexicons):
                     for l, src_phrase in enumerate(src_phrase_sent):
@@ -333,12 +339,12 @@ class TMP:
                                 tgt_phrase = [phrase_1 + " " + phrase_2 for phrase_1 in tgt_phrase
                                               for phrase_2 in temp[key]]
 
-                        tgt_phrase_instance_list[i][l].add_tgt_phrase(tgt_phrase)
+                        tgt_phrase_candidate_list[i][l].add_tgt_phrase(tgt_phrase)
 
-            with open(tgt_phrase_instance_list_path, "wb") as f:
-                pickle.dump(tgt_phrase_instance_list, f)
+            with open(tgt_phrase_candidate_list_path, "wb") as f:
+                pickle.dump(tgt_phrase_candidate_list, f)
 
-            self.tgt_phrase_instance_list = tgt_phrase_instance_list
+            self.tgt_phrase_candidate_list = tgt_phrase_candidate_list
 
             if calc_count_found:
                 total_tokens = list()
@@ -372,10 +378,10 @@ class TMP:
                     print("Translations found: ", translations_found[i])
                     print("Fraction of translations found: %.4f" % float(translations_found[i] / total_tokens[i]))
 
-        self._test_tgt_phrase_instance_list()
+        self._test_tgt_phrase_candidate_list()
 
-    def _test_tgt_phrase_instance_list(self):
-        for tgt_phrase_instances in self.tgt_phrase_instance_list:
+    def _test_tgt_phrase_candidate_list(self):
+        for tgt_phrase_instances in self.tgt_phrase_candidate_list:
             for tpinstance in tgt_phrase_instances:
                 assert len(tpinstance.tgt_phrase_list) == len(config.LEXICON_FILE_NAMES) + 2
 
@@ -408,15 +414,15 @@ class TMP:
             with open(path, "wb") as f:
                 pickle.dump(self.tgt_annotated_list, f)
 
-        # if ABLATION_STRING not in ["_no_idc_", "_no_gold_", "_no_copy_",
+        # if self.args.ablation_string not in ["_no_idc_", "_no_gold_", "_no_copy_",
         #                            "_no_phonetic_", "_no_google_", "_no_google_v2_"]:
         #     temp_suffix = "1_period_"
         # else:
 
-        temp_suffix = ABLATION_STRING
+        temp_suffix = self.args.ablation_string
 
         path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_list_" + str(MATCHING_SCORE_THRESHOLD) + temp_suffix + self.suffix + DATE_TODAY + "_partial" + ".pkl")
+                            "_annotated_list_" + str(self.args.matching_score_threshold) + temp_suffix + self.suffix + self.date_today + "_partial" + ".pkl")
 
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
@@ -428,9 +434,9 @@ class TMP:
             with open(path, 'wb') as f:
                 pickle.dump(self.tgt_annotated_list, f)
 
-        temp_suffix = ABLATION_STRING
+        temp_suffix = self.args.ablation_string
         path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_list_" + str(MATCHING_SCORE_THRESHOLD) + temp_suffix + self.suffix + DATE_TODAY + "_32.pkl")
+                            "_annotated_list_" + str(self.args.matching_score_threshold) + temp_suffix + self.suffix + self.date_today + "_32.pkl")
 
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
@@ -441,19 +447,19 @@ class TMP:
             with open(path, 'wb') as f:
                 pickle.dump(self.tgt_annotated_list, f)
 
-        # path = os.path.join(self.base_path, "problematic_entities_" + DATE_TODAY + ".pkl")
+        # path = os.path.join(self.base_path, "problematic_entities_" + self.date_today + ".pkl")
         # problematic_entities = pickle.load(open(path, "rb"))
         #
-        # path = os.path.join(self.base_path, "problem_children_" + DATE_TODAY + ".pkl")
+        # path = os.path.join(self.base_path, "problem_children_" + self.date_today + ".pkl")
         # problem_children = pickle.load(open(path, "rb"))
         #
-        # path = os.path.join(self.base_path, "problematic_sentences_" + DATE_TODAY + ".pkl")
+        # path = os.path.join(self.base_path, "problematic_sentences_" + self.date_today + ".pkl")
         # problematic_sentences = pickle.load(open(path, "rb"))
         #
         # final_candidate_dict = self.get_refined_candidates(problem_children, problematic_entities)
         # checklist = [[False for _ in problematic_sentences[sent]] for sent in problematic_sentences]
         # num_annotation = 0
-        # for index in range(MOST_COMMON):
+        # for index in range(self.args.topk):
         #     num_annotation += self.tag_problematic_sentences(problematic_sentences, final_candidate_dict,
         #                                    problematic_entities, index, checklist)
         # logging.info("Total number of annotations: " + str(num_annotation))
@@ -466,7 +472,7 @@ class TMP:
         #
         # path = os.path.join(self.base_path, self.args.translate_fname +
         #                     "_annotated_list_" + str(
-        #     MATCHING_SCORE_THRESHOLD) + "2_period_" + self.suffix + DATE_TODAY + ".pkl")
+        #     self.args.matching_score_threshold) + "2_period_" + self.suffix + self.date_today + ".pkl")
         # with open(path, 'wb') as f:
         #     pickle.dump(self.tgt_annotated_list, f)
 
@@ -497,14 +503,14 @@ class TMP:
 
                     candidates_list[i].append(list())
 
-                    all_tgt_phrases = self.tgt_phrase_instance_list[sid][j].tgt_phrase_list
-                    if ABLATION_STRING == "_no_idc_":
+                    all_tgt_phrases = self.tgt_phrase_candidate_list[sid][j].tgt_phrase_list
+                    if self.args.ablation_string == "_no_idc_":
                         all_tgt_phrases = all_tgt_phrases[:-1]
-                    elif ABLATION_STRING == "_no_gold_":
+                    elif self.args.ablation_string == "_no_gold_":
                         all_tgt_phrases = all_tgt_phrases[:-2]
-                    elif ABLATION_STRING == "_no_copy_" or ABLATION_STRING == "_no_phonetic_":
+                    elif self.args.ablation_string == "_no_copy_" or self.args.ablation_string == "_no_phonetic_":
                         all_tgt_phrases = all_tgt_phrases[:-3]
-                    elif ABLATION_STRING == "_no_google_" or ABLATION_STRING == "_no_google_v2_":
+                    elif self.args.ablation_string == "_no_google_" or self.args.ablation_string == "_no_google_v2_":
                         all_tgt_phrases = all_tgt_phrases[1:]
 
                     for k, tgt_phrases in enumerate(all_tgt_phrases):
@@ -568,7 +574,7 @@ class TMP:
                                         else:
                                             transliterate = True
 
-                                        if ABLATION_STRING == "_no_phonetic_" and o == 1:
+                                        if self.args.ablation_string == "_no_phonetic_" and o == 1:
                                             transliterate = False
 
                                         # if k == 1:
@@ -590,7 +596,7 @@ class TMP:
                                         max_indices = [ind for ind, score in enumerate(temp_match[0])
                                                        if score == max_score]
                                         for index in max_indices:
-                                            if max_score >= MATCHING_SCORE_THRESHOLD:
+                                            if max_score >= self.args.matching_score_threshold:
                                                 tgt_matches[index].add((j, k, o, max_score, candidate[1]))
 
             potential_matches.append(tgt_matches)
@@ -709,21 +715,21 @@ class TMP:
                     print("Source phrase: ", src_phrases[j])
                     print("######################################################################")
                     temp_tgt_phrases = set()
-                    all_tgt_phrases = self.tgt_phrase_instance_list[sid][j].tgt_phrase_list
+                    all_tgt_phrases = self.tgt_phrase_candidate_list[sid][j].tgt_phrase_list
                     for k, candidate_phrases in enumerate(all_tgt_phrases):
                         temp_tgt_phrases.update(candidate_phrases)
 
                     final_tgt_phrases = copy.deepcopy(temp_tgt_phrases)
 
-                    if ABLATION_STRING != "_no_google_v2_":
+                    if self.args.ablation_string != "_no_google_v2_":
                         for tgt_phrase in temp_tgt_phrases:
-                            if len(final_tgt_phrases) > MAX_SET_SIZE:
+                            if len(final_tgt_phrases) > self.args.max_set_size:
                                 break
                             if tgt_phrase != all_tgt_phrases[0][0]:
                                 permutations = itertools.permutations(tgt_phrase.split(" "))
                                 final_tgt_phrases.update([" ".join(x) for x in permutations])
 
-                        if len(final_tgt_phrases) > 2 * MAX_SET_SIZE:
+                        if len(final_tgt_phrases) > 2 * self.args.max_set_size:
                             final_tgt_phrases = copy.deepcopy(temp_tgt_phrases)
 
                     print("All source candidate phrases: ", len(final_tgt_phrases))
@@ -818,13 +824,13 @@ class TMP:
         logging.info("Number of occurrences of entities with no match: " + str(occur_problem_entities))
         logging.info("Number of all source entities: " + str(src_entities))
 
-        if ABLATION_STRING == "original" or ABLATION_STRING == "_no_google_" or ABLATION_STRING == "_no_google_v2_":
+        if self.args.ablation_string == "original" or self.args.ablation_string == "_no_google_" or self.args.ablation_string == "_no_google_v2_":
             N = len(self.sentence_ids)
             logging.info("Total documents: " + str(N))
             logging.info("Potential candidates for problematic entities:")
             count_pc = 0
             for pc in problem_children:
-                if problematic_entities[pc] > DISTRIBUTION_OCCURRENCE_THRESHOLD:
+                if problematic_entities[pc] > self.args.min_occur:
                     count_pc += problematic_entities[pc]
                 if problematic_entities[pc] > 0:
                     for k, v in problem_children[pc].items():
@@ -846,15 +852,15 @@ class TMP:
             logging.info("Number of sentences with at least one problematic entity: %d" %
                          len(sentences_to_drop))
 
-            path = os.path.join(self.base_path, "problematic_entities_" + DATE_TODAY + ".pkl")
+            path = os.path.join(self.base_path, "problematic_entities_" + self.date_today + ".pkl")
             with open(path, 'wb') as f:
                 pickle.dump(problematic_entities, f)
 
-            path = os.path.join(self.base_path, "problem_children_" + DATE_TODAY + ".pkl")
+            path = os.path.join(self.base_path, "problem_children_" + self.date_today + ".pkl")
             with open(path, 'wb') as f:
                 pickle.dump(problem_children, f)
 
-            path = os.path.join(self.base_path, "problematic_sentences_" + DATE_TODAY + ".pkl")
+            path = os.path.join(self.base_path, "problematic_sentences_" + self.date_today + ".pkl")
             with open(path, 'wb') as f:
                 pickle.dump(problematic_sentences, f)
 
@@ -864,15 +870,15 @@ class TMP:
             num_annotation += self.tag_problematic_sentences(problematic_sentences, final_candidate_dict,
                                            problematic_entities, checklist)
             logging.info("Number of occurrences of problematic entities with count > %d (PC-%d): %d" %
-                         (DISTRIBUTION_OCCURRENCE_THRESHOLD, DISTRIBUTION_OCCURRENCE_THRESHOLD,
+                         (self.args.min_occur, self.args.min_occur,
                           count_pc))
             logging.info("Total number of annotations: " + str(num_annotation))
 
     def get_refined_candidates(self, problem_children, problematic_entities):
         final_candidate_dict = dict()
         for token in problem_children:
-            if problematic_entities[token] > DISTRIBUTION_OCCURRENCE_THRESHOLD:
-                most_common_candidates = problem_children[token].most_common(10 * MOST_COMMON)
+            if problematic_entities[token] > self.args.min_occur:
+                most_common_candidates = problem_children[token].most_common(10 * self.args.topk)
 
                 new_most_common_candidates = list()
 
@@ -881,7 +887,7 @@ class TMP:
                             and len(re.findall("\d+", candidates[0])) == 0:
                         new_most_common_candidates.append(candidates)
 
-                final_candidates = new_most_common_candidates[:MOST_COMMON]
+                final_candidates = new_most_common_candidates[:self.args.topk]
 
                 final_candidate_dict[token] = final_candidates
                 logging.info("######################################################################")
@@ -905,7 +911,7 @@ class TMP:
 
             for i_ent, entities in enumerate(problematic_sentences[sent]):
                 if not checklist[i_sent][i_ent]:
-                    if problematic_entities[entities[1]] > DISTRIBUTION_OCCURRENCE_THRESHOLD:
+                    if problematic_entities[entities[1]] > self.args.min_occur:
                         total_entities += 1
                         tag_type = src_a.span_list[entities[0]].tag_type
                         entity_str = entities[1]
@@ -959,7 +965,7 @@ class TMP:
         self.tgt_annotated_list = post_process_annotations(self.tgt_annotated_list, self.stop_word_list,
                                                            capitalize=capitalize)
         file_path = os.path.join(self.base_path, self.args.translate_fname + "_affix-match_blah_" +
-                                 str(MATCHING_SCORE_THRESHOLD) + ABLATION_STRING + datetime.today().strftime("%d-%m-%Y"))
+                                 str(self.args.matching_score_threshold) + self.args.ablation_string + datetime.today().strftime("%d-%m-%Y"))
         if self.tgt_lang in ["hi", "ta"]:
             remove_misc = True
         else:
@@ -993,12 +999,14 @@ def get_google_translations(src_list, src_lang_code, tgt_lang_code, api_key):
         source=src_lang_code, target=tgt_lang_code, q=src_list).execute()
     return [t['translatedText'] for t in tgt_dict['translations']]
 
+
 def tokenize_using_corenlp(text):
     corenlp_parser = CoreNLPParser('http://localhost:9001', encoding='utf8')
     result = corenlp_parser.api_call(text, {'annotators': 'tokenize,ssplit'})
     tokens = [token['originalText'] or token['word'] for sentence in result['sentences'] for token in
               sentence['tokens']]
     return tokens
+
 
 def get_clean_tokens(sentence, use_corenlp=True):
     for entity in html.entities.html5:

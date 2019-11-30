@@ -52,56 +52,104 @@ def get_annotated_list(file_path):
 def parse_arguments():
     parser = ArgumentParser(description="Argument Parser for cross-lingual "
                                         "NER.")
+
     parser.add_argument("--src_lang", dest="src_lang", type=str, default="en",
                         help="Source language")
+
     parser.add_argument("--tgt_lang", dest="tgt_lang", type=str, default="es",
                         help='Target language')
+
     parser.add_argument("--translate_fname", dest="translate_fname", type=str,
                         default="train",
                         help="File name to be translated from src_lang to "
                              "tgt_lang (train, dev, test)")
+
     parser.add_argument("--api_key_fname", dest="api_key_fname", type=str,
                         default="api_key", help="File name for Google API key")
+
     # Set this flag to 1 if the input is in its raw form, i.e., in a text file
     # with each token and its corresponding tag (separated by a space) in
     # a separate line.
     parser.add_argument("--pre_process", dest="pre_process", type=int,
                         default=0,
                         help="Whether to pre-process raw data or not")
+
     # Set this flag to 2 if the TRANSLATE step, i.e., translation of the
     # annotated source corpus to the target language, sentence-by-sentence needs
     # to be performed. Set it to 1 if only the first step of MATCH,
     # i.e., translation of entity phrases needs to be performed.
     parser.add_argument("--trans_sent", dest="trans_sent", type=int, default=0,
                         help="Whether to translate full sentences or not")
-    # TODO(alankarjain): Explain what translating all sentences means.
+
+    # This flag determines whether all sentences in the corpus need to be
+    # translated. The flags sentence_ids_file and num_sample can be used in
+    # conjunction with this flag when it is set to 0.
     parser.add_argument("--translate_all", dest="translate_all", type=int,
                         default=1,
                         help="Whether to translate all sentences or not")
-    # Verbosity of the output (0/1/2).
-    parser.add_argument("--verbosity", dest="verbosity", type=int, default=2,
-                        help="Verbosity level")
-    # TODO(alankarjain): Explain what sentence_ids means.
+
+    # If only a sample of the overall corpus needs to be translated,
+    # a few sentence Ids can be sampled and stored as a list in a file for
+    # future experiments.
     parser.add_argument("--sentence_ids_file", dest="sentence_ids_file",
                         type=str, default="sentence_ids",
-                        help="Sentence IDs file name")
-    # TODO(alankarjain): Explain what num_sample means.
-    parser.add_argument('--num_sample', dest='num_sample', type=int,
+                        help="Sentence IDs file name (only root of the name)")
+
+    # The number of samples that need to be generated if the entire corpus
+    # does not need to be translated. Note that this should be equal to the
+    # size of the list of sentence_ids in the sentence_ids_file.
+    parser.add_argument("--num_sample", dest="num_sample", type=int,
                         default=100, help="Number of sentences to sample for "
                                           "partial translation.")
 
-    parser.add_argument('--sent_iter', dest='sent_iter', type=int,
+    parser.add_argument("--verbosity", dest="verbosity", type=int, default=2,
+                        help="Verbosity level of logging (0/1/2)")
+
+    parser.add_argument("--sent_iter", dest="sent_iter", type=int,
                         default=-1, help="Iteration index of the batch "
                                          "of source sentences during which a "
                                          "translation error occurred while "
                                          "translating sentences.")
 
-    parser.add_argument('--phrase_iter', dest='sent_iter', type=int,
+    parser.add_argument("--phrase_iter", dest="phrase_iter", type=int,
                         default=-1, help="Iteration index of the source "
                                          "sentence during which a translation "
                                          "error occurred while translating "
-                                         "only entitites.")
+                                         "entity phrases.")
 
+    parser.add_argument("--matching_score_threshold",
+                        dest="matching_score_threshold",
+                        type=float, default=0.5,
+                        help="All token-level matches with a score below this"
+                             "threshold are ignored.")
+
+    parser.add_argument("--max_set_size",
+                        dest="max_set_size",
+                        type=int, default=1000,
+                        help="Maximum number of permutations to be generated "
+                             "while determining the best span level match.")
+
+    parser.add_argument("--ablation_string",
+                        dest="ablation_string",
+                        type=str, default="original",
+                        help="Ablation string to perform experiments by "
+                             "removing different features (original / "
+                             "_no_idc_ / _no_gold_ / _no_copy_ / "
+                             "_no_phonetic_ / _no_google_ / _no_google_v2_)")
+
+    parser.add_argument("--topk",
+                        dest="topk",
+                        type=int, default=4,
+                        help="For distribution-level matching, each unmatched "
+                             "entity is compared with only top-k spans sorted"
+                             "according to their tf-idf scores.")
+
+    parser.add_argument("--min_occur",
+                        dest="min_occur",
+                        type=int, default=2,
+                        help="For distribution-level matching, each potential "
+                             "span match must occur atleast min_occur number "
+                             "of times.")
 
     return parser.parse_args()
 
@@ -157,6 +205,9 @@ def main():
 
     translation = tmp.TMP(annotated_list, args)
     translation.translate_data()
+
+    # If no translation needs to be performed, proceed with the MATCH +
+    # PROJECT steps.
     if args.trans_sent == 0:
         for lexicon in config.LEXICON_FILE_NAMES:
             base_path = os.path.join(args.data_path, args.src_lang + "-" + args.tgt_lang)
