@@ -2,7 +2,7 @@ import os
 import random
 
 from argparse import ArgumentParser
-from src.util import data_processing, tmp, annotation_evaluation
+from src.util import data_processing, tmp
 from src import config
 import pickle
 
@@ -210,12 +210,13 @@ def main():
     # PROJECT steps.
     if args.trans_sent == 0:
         for lexicon in config.LEXICON_FILE_NAMES:
-            base_path = os.path.join(args.data_path, args.src_lang + "-" + args.tgt_lang)
-            src_file_path = os.path.join(base_path, lexicon + ".txt")
-            tgt_file_path = os.path.join(base_path, lexicon + config.PKL_EXT)
-            tmp.read_lexicon(src_file_path, tgt_file_path)
+            base_path = os.path.join(args.data_path, args.src_lang + "-" +
+                                     args.tgt_lang)
+            txt_path = os.path.join(base_path, lexicon + ".txt")
+            pkl_path = os.path.join(base_path, lexicon + config.PKL_EXT)
+            tmp.read_lexicon(txt_path, pkl_path)
 
-        translation.prepare_mega_tgt_phrase_list(calc_count_found=False)
+        translation.prepare_tgt_candidate_phrase_list()
         translation.get_tgt_annotations_new()
         translation.prepare_train_file()
 

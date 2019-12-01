@@ -1,4 +1,4 @@
-data/
+data_old/
 .idea/
 src/old_func.py
 *.ipynb
@@ -11,6 +11,7 @@ mnist_v3.pdf
 *.DS_Store
 chinese_tokenization
 logs/
+logs_old/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

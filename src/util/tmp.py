@@ -6,22 +6,20 @@ import math
 import time
 import nltk
 import html
-import copy
 import itertools
 import string
-import epitran
 from nltk.parse.corenlp import CoreNLPParser
 import copy
 from googleapiclient.discovery import build
 from src import config
 from src.util import data_processing
-from src.util.annotation_evaluation import post_process_annotations
 from datetime import datetime
 from collections import Counter
 from nltk.corpus import stopwords
 import re
 
 random.seed(config.SEED)
+MAX_ENTITY_PHRASE_TRANSLATIONS = 100
 
 
 class TMP:
@@ -49,7 +47,7 @@ class TMP:
         self.tgt_annotated_list = list()
         # List of candidate phrases in the target language for each source
         # entity phrase.
-        self.tgt_phrase_candidate_list = list()
+        self.tgt_candidate_phrase_list = list()
         # Suffix for intermediate files.
         self.suffix = None
         # A list of sentence Ids that need to be dropped from the final
@@ -212,7 +210,7 @@ class TMP:
                 print("Length of target phrase list: ", len(tgt_phrase_list))
 
             for i, sid in enumerate(sentence_ids):
-                if i < PHRASE_ITER:
+                if i < self.args.phrase_iter:
                     continue
 
                 if self.args.verbosity >= 1:
@@ -296,33 +294,63 @@ class TMP:
             print("Target entity (phrase) list loaded. Length: %d" %
                   len(tgt_phrase_list))
 
-    def prepare_mega_tgt_phrase_list(self, calc_count_found=False):
+    def prepare_tgt_candidate_phrase_list(self):
+        """
+        Prepare a set of candidate translations for every source entity phrase.
+        :return: Nothing.
+        """
         lexicons = list()
-        tgt_phrase_candidate_list = list()
+        tgt_candidate_phrase_list = list()
 
-        tgt_phrase_candidate_list_path = os.path.join(self.base_path, self.args.translate_fname
-        + "_tgt_phrase_candidate_list.pkl")
-        if os.path.exists(tgt_phrase_candidate_list_path):
-            self.tgt_phrase_candidate_list = pickle.load(open(tgt_phrase_candidate_list_path, 'rb'))
+        tgt_candidate_phrase_list_path = \
+            os.path.join(self.base_path, self.args.translate_fname +
+                         "_tgt_candidate_phrase_list.pkl")
+
+        if os.path.exists(tgt_candidate_phrase_list_path):
+            self.tgt_candidate_phrase_list = pickle.load(
+                open(tgt_candidate_phrase_list_path, 'rb'))
 
         else:
             for lexicon_file_name in config.LEXICON_FILE_NAMES:
-                lexicon = pickle.load(open(os.path.join(self.base_path, lexicon_file_name + ".pkl"), "rb"))
+                lexicon = pickle.load(
+                    open(os.path.join(self.base_path,
+                                      lexicon_file_name + ".pkl"), "rb"))
                 lexicons.append(lexicon)
 
+            # For every sentence
             for i, src_phrase_sent in enumerate(self.src_phrase_list):
-                tgt_phrase_candidate_list.append(list())
+                tgt_candidate_phrase_list.append(list())
+                # For every entity phrase in the i'th sentence
                 for j, src_phrase in enumerate(src_phrase_sent):
-                    tgt_phrase_instance = TgtPhrases(src_phrase)
-                    tgt_phrase_instance.add_tgt_phrase([self.tgt_phrase_list[i][j].replace("&#39;", "\'")])
-                    tgt_phrase_instance.add_tgt_phrase([src_phrase])
-                    tgt_phrase_candidate_list[i].append(tgt_phrase_instance)
+                    tgt_phrase_obj = TgtPhrases(src_phrase)
+                    # Translation from Google
+                    tgt_phrase_obj.add_tgt_phrase(
+                        [self.tgt_phrase_list[i][j].replace("&#39;", "\'")])
+                    # Copy
+                    tgt_phrase_obj.add_tgt_phrase([src_phrase])
+                    tgt_candidate_phrase_list[i].append(tgt_phrase_obj)
 
+                # Translations from each lexicon
                 for k, lexicon in enumerate(lexicons):
+                    # For each source entity phrase
                     for l, src_phrase in enumerate(src_phrase_sent):
                         temp = dict()
                         tgt_phrase = list()
 
+                        # src_phrase expressed as a list of tokens
+                        #
+                        # Get a list of all possible translations of the
+                        # source entity phrase from this lexicon. This lexicon
+                        # can, in general, be a one-to-many map from tokens
+                        # to one or many tokens or phrases.
+                        #
+                        # E.g., A B is the source entity phrase,
+                        # where A and B are tokens. Suppose there is an entry
+                        # A -> [a1, a2, a3] in the lexicon and another entry
+                        # B -> [b1, b2]. Then, we add the mapping
+                        # A B -> [a1b1, a1b2, a2b1, ..., a3b2] to our
+                        # list of candidate translations of the source entity
+                        # phrase "A B" in the target language.
                         src_phrase = src_phrase.split(" ")
                         for m, src_token in enumerate(src_phrase):
                             temp[m] = list()
@@ -330,77 +358,71 @@ class TMP:
                                 for tgt_token in lexicon[src_token.lower()]:
                                     temp[m].append(tgt_token.capitalize())
                             else:
+                                # If A -> [], but B -> [b1, b2], we construct
+                                # the map A B -> [Ab1, Ab2], rather than
+                                # A B -> [], because the second step of MATCH (
+                                # first is what we are doing here: constructing
+                                # a list of candidate target translations)
+                                # involves token-level matching and if we find
+                                # a match for B, we improve our chances of
+                                # finding a match for A B, despite A not
+                                # having an entry in the lexicon.
                                 temp[m].append(src_token)
 
                         for key in temp:
                             if tgt_phrase == list():
                                 tgt_phrase = temp[key]
                             else:
-                                tgt_phrase = [phrase_1 + " " + phrase_2 for phrase_1 in tgt_phrase
+                                # Successively add token-level translations
+                                # to populate the tgt_phrase list.
+                                tgt_phrase = [phrase_1 + " " + phrase_2 for
+                                              phrase_1 in tgt_phrase
                                               for phrase_2 in temp[key]]
 
-                        tgt_phrase_candidate_list[i][l].add_tgt_phrase(tgt_phrase)
+                        tgt_candidate_phrase_list[i][l].add_tgt_phrase(
+                            tgt_phrase)
 
-            with open(tgt_phrase_candidate_list_path, "wb") as f:
-                pickle.dump(tgt_phrase_candidate_list, f)
+            with open(tgt_candidate_phrase_list_path, "wb") as f:
+                pickle.dump(tgt_candidate_phrase_list, f)
 
-            self.tgt_phrase_candidate_list = tgt_phrase_candidate_list
+            self.tgt_candidate_phrase_list = tgt_candidate_phrase_list
 
-            if calc_count_found:
-                total_tokens = list()
-                translations_found = list()
-                translation_tokens = list()
-                all_tokens = list()
+        self._test_tgt_candidate_phrase_list()
 
-                for _ in config.LEXICON_FILE_NAMES:
-                    total_tokens.append(0)
-                    translations_found.append(0)
-                    translation_tokens.append(list())
-
-                for i, src_phrase_sent in enumerate(self.src_phrase_list):
-                    for k, lexicon in enumerate(lexicons):
-                        for l, src_phrase in enumerate(src_phrase_sent):
-                            src_phrase = src_phrase.split(" ")
-                            for m, src_token in enumerate(src_phrase):
-                                total_tokens[k] += 1
-                                all_tokens.append(src_token)
-                                if src_token.lower() in lexicon:
-                                    translation_tokens[k].append(src_token)
-                                    translations_found[k] += 1
-
-                for i, _ in enumerate(lexicons):
-                    print("Unique tokens in IDC: ", len(set(translation_tokens[1])))
-                    print("Unique tokens in ground truth: ", len(set(translation_tokens[0])))
-                    print("Unique tokens in source entities: ", len(set(all_tokens)))
-                    print("In IDC but not in ground truth: ", len(set(translation_tokens[1]).difference(set(translation_tokens[0]))))
-                    print("In ground truth but not in IDC: ", len(set(translation_tokens[0]).difference(set(translation_tokens[1]))))
-                    print("Total tokens: ", total_tokens[i])
-                    print("Translations found: ", translations_found[i])
-                    print("Fraction of translations found: %.4f" % float(translations_found[i] / total_tokens[i]))
-
-        self._test_tgt_phrase_candidate_list()
-
-    def _test_tgt_phrase_candidate_list(self):
-        for tgt_phrase_instances in self.tgt_phrase_candidate_list:
-            for tpinstance in tgt_phrase_instances:
-                assert len(tpinstance.tgt_phrase_list) == len(config.LEXICON_FILE_NAMES) + 2
+    def _test_tgt_candidate_phrase_list(self):
+        """
+        A very basic test to ensure that every element of the
+        tgt_candidate_phrase_list (i.e., a list of TgtPhrases objects) has
+        objects whose tgt_phrase_list field as 2 (1 Google Translate, 1 copy)
+        + #lexicon items.
+        :return: Nothing.
+        """
+        for tgt_phrase_object_list in self.tgt_candidate_phrase_list:
+            for tpobj in tgt_phrase_object_list:
+                assert len(tpobj.tgt_phrase_list) == len(
+                    config.LEXICON_FILE_NAMES) + 2
 
     def get_tgt_annotations_new(self):
         # Target language tokens (obtained through Google Translate + cleaned)
-        path = os.path.join(self.base_path, self.args.translate_fname + "_tgt_annotated_list_period_" + self.suffix + ".pkl")
+        # These tokens do not have tags yet, which is what would be done in
+        # this function.
+        path = os.path.join(self.base_path, self.args.translate_fname +
+                            "_tgt_annotated_list_" + self.suffix +
+                            ".pkl")
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
 
         else:
             for i, sentence in enumerate(self.tgt_sentence_list):
-                print("######################################################################")
-                print("Sentence-%d: %s" % (i, sentence))
                 sentence = sentence.replace("&#39;", "\'")
                 sentence = sentence.replace(" &amp; ", "&")
                 tgt_annotation = data_processing.Annotation()
-                tgt_annotation.tokens = get_clean_tokens(sentence, self.use_corenlp)
+                tgt_annotation.tokens = get_clean_tokens(sentence,
+                                                         self.use_corenlp)
 
                 if self.tgt_lang == "hi":
+                    # Modifying the end of sentence punctuation mark for
+                    # Hindi, to ensure that the train and test files match.
                     for j, token in enumerate(tgt_annotation.tokens):
                         if token.endswith("।"):
                             tgt_annotation.tokens[j] = token.rstrip("।")
@@ -408,27 +430,31 @@ class TMP:
                                 tgt_annotation.tokens[j] = "."
                             else:
                                 tgt_annotation.tokens.insert(j + 1, ".")
+                if self.args.verbosity >= 1:
+                    print("####################################################"
+                          "##################")
+                    print("Sentence-%d: %s" % (i, sentence))
+                    print("Tokens: ", tgt_annotation.tokens)
 
-                print("Tokens: ", tgt_annotation.tokens)
                 self.tgt_annotated_list.append(tgt_annotation)
+
             with open(path, "wb") as f:
                 pickle.dump(self.tgt_annotated_list, f)
 
-        # if self.args.ablation_string not in ["_no_idc_", "_no_gold_", "_no_copy_",
-        #                            "_no_phonetic_", "_no_google_", "_no_google_v2_"]:
-        #     temp_suffix = "1_period_"
-        # else:
-
         temp_suffix = self.args.ablation_string
 
+        # Get partial NER tags first.
         path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_list_" + str(self.args.matching_score_threshold) + temp_suffix + self.suffix + self.date_today + "_partial" + ".pkl")
+                            "_annotated_list_" +
+                            str(self.args.matching_score_threshold) +
+                            temp_suffix + self.suffix
+                            + self.date_today + "_partial" + ".pkl")
 
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
 
         else:
-            candidates_list = self.get_candidates_list()
+            candidates_list = self._get_candidates_list()
             potential_matches = self.get_potential_matches(candidates_list)
             self.get_partial_tags(potential_matches)
             with open(path, 'wb') as f:
@@ -436,7 +462,10 @@ class TMP:
 
         temp_suffix = self.args.ablation_string
         path = os.path.join(self.base_path, self.args.translate_fname +
-                            "_annotated_list_" + str(self.args.matching_score_threshold) + temp_suffix + self.suffix + self.date_today + "_32.pkl")
+                            "_annotated_list_" +
+                            str(self.args.matching_score_threshold) +
+                            temp_suffix + self.suffix + self.date_today +
+                            ".pkl")
 
         if os.path.exists(path):
             self.tgt_annotated_list = pickle.load(open(path, "rb"))
@@ -447,68 +476,55 @@ class TMP:
             with open(path, 'wb') as f:
                 pickle.dump(self.tgt_annotated_list, f)
 
-        # path = os.path.join(self.base_path, "problematic_entities_" + self.date_today + ".pkl")
-        # problematic_entities = pickle.load(open(path, "rb"))
-        #
-        # path = os.path.join(self.base_path, "problem_children_" + self.date_today + ".pkl")
-        # problem_children = pickle.load(open(path, "rb"))
-        #
-        # path = os.path.join(self.base_path, "problematic_sentences_" + self.date_today + ".pkl")
-        # problematic_sentences = pickle.load(open(path, "rb"))
-        #
-        # final_candidate_dict = self.get_refined_candidates(problem_children, problematic_entities)
-        # checklist = [[False for _ in problematic_sentences[sent]] for sent in problematic_sentences]
-        # num_annotation = 0
-        # for index in range(self.args.topk):
-        #     num_annotation += self.tag_problematic_sentences(problematic_sentences, final_candidate_dict,
-        #                                    problematic_entities, index, checklist)
-        # logging.info("Total number of annotations: " + str(num_annotation))
-        #
-        # for i, sid in enumerate(self.sentence_ids):
-        #     tgt_a = self.tgt_annotated_list[sid]
-        #     for ind, tag in enumerate(tgt_a.ner_tags):
-        #         if tag not in config.allowed_tags:
-        #             tgt_a.ner_tags[ind] = config.OUTSIDE_TAG
-        #
-        # path = os.path.join(self.base_path, self.args.translate_fname +
-        #                     "_annotated_list_" + str(
-        #     self.args.matching_score_threshold) + "2_period_" + self.suffix + self.date_today + ".pkl")
-        # with open(path, 'wb') as f:
-        #     pickle.dump(self.tgt_annotated_list, f)
-
-    def get_candidates_list(self):
+    def _get_candidates_list(self):
+        """
+        :return: List of candidate token-level translations for all source entity
+        # phrases in all source sentences.
+        """
+        # candidates_list = [c1, c2, ...., cn], where n is the no. of sentences.
+        # c_i = [t_i1, t_i2, ...], where t_ij, j=1, 2, 3, ..., is the list
+        # of all candidate token-level translations corresponding to the
+        # source entity phrase j in sentence i. Finally, t_ij = [tok_ij1,
+        # tok_ij2, ...], where tok_ijk, k=1, 2, 3, ..., is the k'th token-level
+        # translation corresponding to entity phrase j in sentence i.
         candidates_list = list()
-        # self.sentence_ids = [153]
-        # self.sentence_ids = list(range(100))
 
-        print("######################################################################")
-        print("######################################################################")
+        print("###############################################################")
+        print("###############################################################")
         print("Step-1: Getting candidate tags.")
-        print("######################################################################")
-        print("######################################################################")
+        print("###############################################################")
+        print("###############################################################")
+
         for i, sid in enumerate(self.sentence_ids):
             src_a = self.src_annotated_list[sid]
             src_phrases = self.src_phrase_list[sid]
 
-            print("######################################################################")
+            print("###########################################################")
             print("Sentence ID: ", sid)
-            print("######################################################################")
+            print("###########################################################")
 
             candidates_list.append(list())
-            if src_phrases != list():
+
+            if src_phrases:
                 for j, src_phrase in enumerate(src_phrases):
-                    print("######################################################################")
+                    print("###################################################")
                     print("Source phrase: ", src_phrase)
-                    print("######################################################################")
+                    print("###################################################")
 
                     candidates_list[i].append(list())
 
-                    all_tgt_phrases = self.tgt_phrase_candidate_list[sid][j].tgt_phrase_list
+                    all_tgt_phrases = \
+                        self.tgt_candidate_phrase_list[sid][j].tgt_phrase_list
                     if self.args.ablation_string == "_no_idc_":
+                        # Assuming idc lexicon is the last one in the
+                        # tgt_candidate_phrase_list.
                         all_tgt_phrases = all_tgt_phrases[:-1]
                     elif self.args.ablation_string == "_no_gold_":
+                        # Assuming gold lexicon is second last.
                         all_tgt_phrases = all_tgt_phrases[:-2]
-                    elif self.args.ablation_string == "_no_copy_" or self.args.ablation_string == "_no_phonetic_":
+                    elif self.args.ablation_string == "_no_copy_" or \
+                            self.args.ablation_string == "_no_phonetic_":
+                        # Assuming
                         all_tgt_phrases = all_tgt_phrases[:-3]
                     elif self.args.ablation_string == "_no_google_" or self.args.ablation_string == "_no_google_v2_":
                         all_tgt_phrases = all_tgt_phrases[1:]
@@ -516,7 +532,7 @@ class TMP:
                     for k, tgt_phrases in enumerate(all_tgt_phrases):
                         candidates_list[i][j].append(list())
                         for l, tgt_phrase in enumerate(tgt_phrases):
-                            if l == 100:
+                            if l == MAX_ENTITY_PHRASE_TRANSLATIONS:
                                 break
                             print(src_a.tokens)
 
@@ -576,11 +592,6 @@ class TMP:
 
                                         if self.args.ablation_string == "_no_phonetic_" and o == 1:
                                             transliterate = False
-
-                                        # if k == 1:
-                                        #     epi = self.src_epi
-                                        # else:
-                                        #     epi = self.epi
 
                                         epi = self.epi
 
@@ -715,7 +726,7 @@ class TMP:
                     print("Source phrase: ", src_phrases[j])
                     print("######################################################################")
                     temp_tgt_phrases = set()
-                    all_tgt_phrases = self.tgt_phrase_candidate_list[sid][j].tgt_phrase_list
+                    all_tgt_phrases = self.tgt_candidate_phrase_list[sid][j].tgt_phrase_list
                     for k, candidate_phrases in enumerate(all_tgt_phrases):
                         temp_tgt_phrases.update(candidate_phrases)
 
@@ -1001,16 +1012,24 @@ def get_google_translations(src_list, src_lang_code, tgt_lang_code, api_key):
 
 
 def tokenize_using_corenlp(text):
+    """
+    :param text: String that needs to be tokenized.
+    :return: Tokens
+    This requires a CoreNLP server to be running on port 9001. Please follow
+    the steps listed here:
+    https://stanfordnlp.github.io/CoreNLP/corenlp-server.html.
+    """
     corenlp_parser = CoreNLPParser('http://localhost:9001', encoding='utf8')
     result = corenlp_parser.api_call(text, {'annotators': 'tokenize,ssplit'})
-    tokens = [token['originalText'] or token['word'] for sentence in result['sentences'] for token in
-              sentence['tokens']]
+    tokens = [token['originalText'] or token['word'] for sentence in
+              result['sentences'] for token in sentence['tokens']]
     return tokens
 
 
 def get_clean_tokens(sentence, use_corenlp=True):
-    for entity in html.entities.html5:
-        sentence = sentence.replace("&" + entity + ";", html.entities.html5[entity])
+    for ent in html.entities.html5:
+        sentence = sentence.replace("&" + ent + ";",
+                                    html.entities.html5[ent])
 
     if use_corenlp:
         tokens = tokenize_using_corenlp(sentence)
@@ -1021,6 +1040,7 @@ def get_clean_tokens(sentence, use_corenlp=True):
     ampersand_found = False
     prior_period_index = -float("inf")
 
+    # Combine the tokens in "S & P" to obtain a single entity "S&P" and "U. S."
     for i, token in enumerate(tokens):
         if ampersand_found:
             ampersand_found = False
@@ -1033,7 +1053,8 @@ def get_clean_tokens(sentence, use_corenlp=True):
                 ampersand_found = True
 
         elif token == "." and i != 0 and i != len(tokens) - 1:
-            if prior_period_index == -float("inf") or i - prior_period_index > 2:
+            if prior_period_index == -float("inf") or \
+                    i - prior_period_index > 2:
                 prior_period_index = i
                 final_tokens.pop()
                 final_tokens.append(tokens[i - 1] + ".")
@@ -1128,20 +1149,23 @@ def get_readable_annotations(tokens, annotations):
     return full_annotations
 
 
-def read_lexicon(src_file_path, tgt_file_path):
-    with open(src_file_path, "r", encoding="utf-8") as f:
+def read_lexicon(txt_path, pkl_path):
+    """
+    :param txt_path: Path of the input lexicon text file
+    :param pkl_path: Path of the output lexicon pickle file
+    :return: 
+    """
+    with open(txt_path, "r", encoding="utf-8") as f:
         rows = f.readlines()
         lexicon = dict()
         for row in rows:
             row = row.rstrip("\n").split(" ")
-            print(row)
             src_word = row[0]
             tgt_word = row[1]
             if src_word not in lexicon:
                 lexicon[src_word] = list()
             lexicon[src_word].append(tgt_word)
-
-    with open(tgt_file_path, 'wb') as f:
+    with open(pkl_path, 'wb') as f:
         pickle.dump(lexicon, f)
 
 
@@ -1212,3 +1236,41 @@ def _google_translate_lang_code(lang):
         return "zh-CN"
     else:
         return lang
+
+
+def post_process_annotations(tgt_annotated_list, stop_word_list, capitalize=False):
+    for i, tgt_a in enumerate(tgt_annotated_list):
+        prev_type = None
+        for j, curr_tag in enumerate(tgt_a.ner_tags):
+            if curr_tag.startswith("I"):
+                curr_type = curr_tag.split("-")[1]
+                if capitalize:
+                    if curr_type == "PER":
+                        is_per = True
+                    else:
+                        is_per = False
+                    tgt_a.tokens[j] = capitalize_conditionally(tgt_a.tokens[j], stop_word_list, is_per)
+                if curr_type != prev_type:
+                    tgt_a.ner_tags[j] = "B-" + curr_type
+            elif curr_tag.startswith("B"):
+                curr_type = curr_tag.split("-")[1]
+                if capitalize:
+                    if curr_type == "PER":
+                        is_per = True
+                    else:
+                        is_per = False
+                    tgt_a.tokens[j] = capitalize_conditionally(tgt_a.tokens[j], stop_word_list, is_per)
+            else:
+                curr_type = None
+            prev_type = curr_type
+    return tgt_annotated_list
+
+
+def capitalize_conditionally(token, stop_word_list, is_per=False):
+    if is_per:
+        if not token[0].isupper():
+            token = token.capitalize()
+    elif token not in stop_word_list:
+        if not token[0].isupper():
+            token = token.capitalize()
+    return token

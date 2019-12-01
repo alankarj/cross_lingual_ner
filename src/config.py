@@ -39,11 +39,15 @@ FAST_ALIGN_SEP = ' ||| '
 FAST_ALIGN_PATH = '/home/ubuntu/fast_align/build'
 FAST_ALIGN_OUTPUT_FNAME = 'forward.align'
 
-BATCH_SIZE = 128
+# Names of the lexicons used for augmenting the set of candidate entity
+# translations. _ground-truth refers to the ground truth Lexicon obtained
+# through MUSE. _idc refers to the lexicon induced using the BWET paper (
+# provided by the authors). You can add names od additional lexicons here.
+LEXICON_FILE_NAMES = ["lexicon_ground-truth", "lexicon_idc"]
 
-# LEXICON_FILE_NAMES = ["lexicon_ground-truth", "lexicon_idc"]
-LEXICON_FILE_NAMES = ["lexicon_ground-truth"]
-# LEXICON_FILE_NAMES = []
+# Names of matching algorithms used during the MATCH step. token_match refers
+# to an orthographic character-level match. ipa_match refers to matching of
+# IPA transliterations of the hypothesis and reference tokens.
 MATCHING_ALGOS = ["token_match", "ipa_match"]
 
 TAGGER_FILE_PATH = "/Users/alankarjain/Documents/code/spring_2019/tagger"
@@ -263,5 +267,6 @@ allowed_tags = get_allowed_tags() + [OUTSIDE_TAG]
 
 def get_epi(lang):
     if lang == "zh":
-        return epitran.Epitran(EPI_DICT[lang], cedict_file="cedict_ts.u8")
+        return epitran.Epitran(EPI_DICT[lang],
+                               cedict_file="data/zh/cedict_ts.u8")
     return epitran.Epitran(EPI_DICT[lang])
